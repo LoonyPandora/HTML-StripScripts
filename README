@@ -19,8 +19,8 @@ SYNOPSIS
 DESCRIPTION
     This module strips scripting constructs out of HTML, leaving as much
     non-scripting markup in place as possible. This allows web applications
-    to display HTML originating from an unstrusted source without
-    introducing XSS (cross site scripting) vulnerabilities.
+    to display HTML originating from an untrusted source without introducing
+    XSS (cross site scripting) vulnerabilities.
 
     The process is based on whitelists of tags, attributes and attribute
     values. This approach is the most secure against disguised scripting
@@ -51,8 +51,8 @@ CONSTRUCTORS
 
             "Document"
                 If "Context" is "Document" then the filter will allow a full
-                HTML document, including the "<html>" tag and "<head>" and
-                "<body>" sections.
+                HTML document, including the "HTML" tag and "HEAD" and
+                "BODY" sections.
 
             "Flow"
                 If "Context" is "Flow" then most of the cosmetic tags that
@@ -60,8 +60,8 @@ CONSTRUCTORS
                 including lists and tables but not including forms.
 
             "Inline"
-                If "Context" is "Inline" then only inline tags such as "<i>"
-                and "<font>" are allowed.
+                If "Context" is "Inline" then only inline tags such as "B"
+                and "FONT" are allowed.
 
             "NoTags"
                 If "Context" is "NoTags" then no tags are allowed.
@@ -73,9 +73,9 @@ CONSTRUCTORS
             normally be allowed (because it presents no XSS hazard) will be
             blocked if the lowercase name of the tag is a key in this hash.
 
-            For example, in a guestbook application where "<hr>" tags are
-            used to separate posts, you may wish to prevent posts from
-            including "<hr>" tags, even though "<hr>" is not an XSS risk.
+            For example, in a guestbook application where "HR" tags are used
+            to separate posts, you may wish to prevent posts from including
+            "HR" tags, even though "HR" is not an XSS risk.
 
         "BanAllBut"
             If present, this option must be reference to an array holding a
@@ -85,14 +85,14 @@ CONSTRUCTORS
 
         "AllowSrc"
             By default, the filter won't allow constructs that cause the
-            browser to fetch things automatically, such as "src" attributes
-            in "<img>" tags. If this option is present and true then those
+            browser to fetch things automatically, such as "SRC" attributes
+            in "IMG" tags. If this option is present and true then those
             constructs will be allowed.
 
         "AllowHref"
             By default, the filter won't allow constructs that cause the
             browser to fetch things if the user clicks on something, such as
-            the "href" attribute in "<a>" tags. Set this option to a true
+            the "HREF" attribute in "A" tags. Set this option to a true
             value to allow this type of construct.
 
 METHODS
@@ -104,11 +104,11 @@ METHODS
 
     input_start ( TEXT )
         Handles a start tag from the input document. TEXT must be the full
-        text of the tag, including anglebrackets.
+        text of the tag, including angle-brackets.
 
     input_end ( TEXT )
         Handles an end tag from the input document. TEXT must be the full
-        text of the end tag, including anglebrackets.
+        text of the end tag, including angle-brackets.
 
     input_text ( TEXT )
         Handles some non-tag text from the input document.
@@ -119,7 +119,7 @@ METHODS
     input_comment ( TEXT )
         Handles an HTML comment from the input document.
 
-    input_declartion ( TEXT )
+    input_declaration ( TEXT )
         Handles an declaration from the input document.
 
     input_end_document ()
@@ -200,12 +200,12 @@ REJECT METHODS
     reject_comment ( TEXT )
     reject_process ( TEXT )
 
-WHITELIST INITIALISATION METHODS
+WHITELIST INITIALIZATION METHODS
     The filter refers to various whitelists to determine which constructs
     are acceptable. To modify these whitelists, subclasses can override the
     following methods.
 
-    Each method is called once at object initialisation time, and must
+    Each method is called once at object initialization time, and must
     return a reference to a nested data structure. These references are
     installed into the object, and used whenever the filter needs to refer
     to a whitelist.
@@ -277,7 +277,7 @@ WHITELIST INITIALISATION METHODS
     init_deinter_whitelist
         Returns a reference to the "DeInter" whitelist, which determines
         which inline tags the filter should attempt to automatically
-        deinterleave if they are encountered interleaved. For example, the
+        de-interleave if they are encountered interleaved. For example, the
         filter will transform:
 
           <b>hello <i>world</b> !</i>
@@ -494,6 +494,14 @@ PRIVATE METHODS
     _hss_valid_in_current_context ( TAG )
         Returns true if the lowercase tag name TAG is valid in the filter's
         current context, false otherwise.
+
+BUGS
+    *   This module does a lot of work to ensure that tags are correctly
+        nested and are not left open, causing unnecessary overhead for
+        applications where that doesn't matter.
+
+        Such applications may benefit from using the more lightweight
+        HTML::Scrubber::StripScripts module instead.
 
 SEE ALSO
     HTML::Parser, HTML::StripScripts::Parser, HTML::StripScripts::Regex

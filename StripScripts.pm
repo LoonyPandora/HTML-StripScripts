@@ -2,8 +2,8 @@ package HTML::StripScripts;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.01';
-# $Rev: 70 $
+$VERSION = '0.02';
+# $Rev: 83 $
 
 =head1 NAME
 
@@ -29,7 +29,7 @@ HTML::StripScripts - strip scripting constructs out of HTML
 
 This module strips scripting constructs out of HTML, leaving as
 much non-scripting markup in place as possible.  This allows web
-applications to display HTML originating from an unstrusted source
+applications to display HTML originating from an untrusted source
 without introducing XSS (cross site scripting) vulnerabilities.
 
 The process is based on whitelists of tags, attributes and attribute
@@ -71,8 +71,8 @@ If present, the C<Context> value must be one of:
 =item C<Document>
 
 If C<Context> is C<Document> then the filter will allow a full
-HTML document, including the C<E<lt>htmlE<gt>> tag and
-C<E<lt>headE<gt>> and C<E<lt>bodyE<gt>> sections.
+HTML document, including the C<HTML> tag and C<HEAD> and C<BODY>
+sections.
 
 =item C<Flow>
 
@@ -82,8 +82,8 @@ lists and tables but not including forms.
 
 =item C<Inline>
 
-If C<Context> is C<Inline> then only inline tags such as C<E<lt>iE<gt>>
-and C<E<lt>fontE<gt>> are allowed.
+If C<Context> is C<Inline> then only inline tags such as C<B>
+and C<FONT> are allowed.
 
 =item C<NoTags>
 
@@ -99,9 +99,9 @@ If present, this option must be a hashref.  Any tag that would normally
 be allowed (because it presents no XSS hazard) will be blocked if the
 lowercase name of the tag is a key in this hash.
 
-For example, in a guestbook application where C<E<lt>hrE<gt>> tags are used to
-separate posts, you may wish to prevent posts from including C<E<lt>hrE<gt>>
-tags, even though C<E<lt>hrE<gt>> is not an XSS risk.
+For example, in a guestbook application where C<HR> tags are used to
+separate posts, you may wish to prevent posts from including C<HR>
+tags, even though C<HR> is not an XSS risk.
 
 =item C<BanAllBut>
 
@@ -112,16 +112,16 @@ tags to the ban list, so that only those tags listed will be allowed.
 =item C<AllowSrc>
 
 By default, the filter won't allow constructs that cause the browser to
-fetch things automatically, such as C<src> attributes in C<E<lt>imgE<gt>>
-tags.  If this option is present and true then those constructs will be
+fetch things automatically, such as C<SRC> attributes in C<IMG> tags.
+If this option is present and true then those constructs will be
 allowed.
 
 =item C<AllowHref>
 
 By default, the filter won't allow constructs that cause the browser to
-fetch things if the user clicks on something, such as the C<href>
-attribute in C<E<lt>aE<gt>> tags.  Set this option to a true value to
-allow this type of construct.
+fetch things if the user clicks on something, such as the C<HREF>
+attribute in C<A> tags.  Set this option to a true value to allow this
+type of construct.
 
 =back
 
@@ -188,7 +188,7 @@ sub input_start_document {
 =item input_start ( TEXT )
 
 Handles a start tag from the input document.  TEXT must be the
-full text of the tag, including anglebrackets.
+full text of the tag, including angle-brackets.
 
 =cut
 
@@ -261,7 +261,7 @@ sub _hss_accept_input_start {
 =item input_end ( TEXT )
 
 Handles an end tag from the input document.  TEXT must be the
-full text of the end tag, including anglebrackets.
+full text of the end tag, including angle-brackets.
 
 =cut
 
@@ -299,7 +299,7 @@ sub _hss_accept_input_end {
     }
 
     # Reopen any we closed early if all that were closed are
-    # configured to be auto deinterleaved.
+    # configured to be auto de-interleaved.
     unless (grep {! $self->{_hssDeInter}{$_->{NAME}} } @close) {
         pop @close;
         unshift @{ $self->{_hssStack} }, @close;
@@ -362,7 +362,7 @@ sub input_comment {
     $self->reject_comment($text);
 }
 
-=item input_declartion ( TEXT )
+=item input_declaration ( TEXT )
 
 Handles an declaration from the input document.
 
@@ -556,13 +556,13 @@ sub reject_start { $_[0]->output_comment('<!--filtered-->'); }
 *reject_process     = \&reject_start;
 
 
-=head1 WHITELIST INITIALISATION METHODS
+=head1 WHITELIST INITIALIZATION METHODS
 
 The filter refers to various whitelists to determine which constructs
 are acceptable.  To modify these whitelists, subclasses can override
 the following methods.
 
-Each method is called once at object initialisation time, and must
+Each method is called once at object initialization time, and must
 return a reference to a nested data structure.  These references are
 installed into the object, and used whenever the filter needs to refer
 to a whitelist.
@@ -963,7 +963,7 @@ sub init_style_whitelist { return \%_Style; }
 =item init_deinter_whitelist
 
 Returns a reference to the C<DeInter> whitelist, which determines which inline
-tags the filter should attempt to automatically deinterleave if they are
+tags the filter should attempt to automatically de-interleave if they are
 encountered interleaved.  For example, the filter will transform:
 
   <b>hello <i>world</b> !</i>
@@ -1572,6 +1572,21 @@ sub _hss_valid_in_current_context {
 
     $self->_hss_valid_in_context($tag, $self->_hss_context);
 }
+
+=back
+
+=head1 BUGS
+
+=over
+
+=item
+
+This module does a lot of work to ensure that tags are correctly
+nested and are not left open, causing unnecessary overhead for
+applications where that doesn't matter.
+
+Such applications may benefit from using the more lightweight
+L<HTML::Scrubber::StripScripts> module instead.
 
 =back
 
