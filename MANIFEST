@@ -1,0 +1,11 @@
+MANIFEST
+Changes
+Makefile.PL
+README
+StripScripts.pm
+t/10basic.t
+t/20config.t
+t/30subclass.t
+t/21input_start.t
+t/22input_end.t
+t/40bodytext.t
