@@ -9,3 +9,4 @@ t/30subclass.t
 t/21input_start.t
 t/22input_end.t
 t/40bodytext.t
+t/50rel_url.t

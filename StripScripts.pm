@@ -2,8 +2,7 @@ package HTML::StripScripts;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = '0.02';
-# $Rev: 83 $
+$VERSION = '0.03';
 
 =head1 NAME
 
@@ -122,6 +121,12 @@ By default, the filter won't allow constructs that cause the browser to
 fetch things if the user clicks on something, such as the C<HREF>
 attribute in C<A> tags.  Set this option to a true value to allow this
 type of construct.
+
+=item C<AllowRelURL>
+
+By default, the filter won't allow relative URLs such as C<../foo.html>
+in C<SRC> and C<HREF> attribute values.  Set this option to a true value
+to allow them.
 
 =back
 
@@ -1111,6 +1116,8 @@ length limits.
 
 sub validate_href_attribute {
     my ($self, $text) = @_;
+
+    return $1 if $self->{_hssCfg}{AllowRelURL} and $text =~ /^([\w\-\.\,\/]{1,100})$/;
 
     $text =~ m< ^ ( https? :// [\w\-\.]{1,100} (?:\:\d{1,5})?
                     (?: / (?:[\w\-.!~*|;/?=+\$,%#]|&amp;){0,100} )?

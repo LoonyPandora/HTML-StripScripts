@@ -95,6 +95,11 @@ CONSTRUCTORS
             the "HREF" attribute in "A" tags. Set this option to a true
             value to allow this type of construct.
 
+        "AllowRelURL"
+            By default, the filter won't allow relative URLs such as
+            "../foo.html" in "SRC" and "HREF" attribute values. Set this
+            option to a true value to allow them.
+
 METHODS
     This class provides the following methods:
 

@@ -4,3 +4,5 @@
 0.02  25 Jul 2003  Fixed some spelling errors.
                    Added a reference to HTML::Scrubber::StripScripts.
 
+0.03  27 Apr 2004  Added the AllowRelURL option, in response to RT #6123
+
