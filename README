@@ -22,6 +22,9 @@ DESCRIPTION
     to display HTML originating from an untrusted source without introducing
     XSS (cross site scripting) vulnerabilities.
 
+    You will probably use HTML::StripScripts::Parser rather than using this
+    module directly.
+
     The process is based on whitelists of tags, attributes and attribute
     values. This approach is the most secure against disguised scripting
     constructs hidden in malicious HTML documents.
@@ -29,6 +32,10 @@ DESCRIPTION
     As well as removing scripting constructs, this module ensures that there
     is a matching end for each start tag, and that the tags are properly
     nested.
+
+    Previously, in order to customise the output, you needed to subclass
+    "HTML::StripScripts" and override methods. Now, most customisation can
+    be done through the "Rules" option provided to "new()".
 
     The HTML document must be parsed into start tags, end tags and text
     before it can be filtered by this module. Use either
@@ -41,6 +48,18 @@ CONSTRUCTORS
         particular filtering policy. If present, the CONFIG parameter must
         be a hashref. The following keys are recognized (unrecognized keys
         will be silently ignored).
+
+            $s = HTML::Stripscripts->new({
+                Context         => 'Document|Flow|Inline|NoTags',
+                BanList         => [qw( br img )] | {br => '1', img => '1'},
+                BanAllBut       => [qw(p div span)],
+                AllowSrc        => 0|1,
+                AllowHref       => 0|1,
+                AllowRelURL     => 0|1,
+                AllowMailto     => 0|1,
+                EscapeFiltered  => 0|1,
+                Rules           => { See below for details },
+            });
 
         "Context"
             A string specifying the context in which the filtered document
@@ -69,9 +88,10 @@ CONSTRUCTORS
             The default "Context" value is "Flow".
 
         "BanList"
-            If present, this option must be a hashref. Any tag that would
-            normally be allowed (because it presents no XSS hazard) will be
-            blocked if the lowercase name of the tag is a key in this hash.
+            If present, this option must be an arrayref or a hashref. Any
+            tag that would normally be allowed (because it presents no XSS
+            hazard) will be blocked if the lowercase name of the tag is in
+            this list.
 
             For example, in a guestbook application where "HR" tags are used
             to separate posts, you may wish to prevent posts from including
@@ -98,7 +118,219 @@ CONSTRUCTORS
         "AllowRelURL"
             By default, the filter won't allow relative URLs such as
             "../foo.html" in "SRC" and "HREF" attribute values. Set this
-            option to a true value to allow them.
+            option to a true value to allow them. "AllowHref" and / or
+            "AllowSrc" also need to be set to true for this to have any
+            effect.
+
+        "AllowMailto"
+            By default, "mailto:" links are not allowed. If "AllowMailto" is
+            set to a true value, then this construct will be allowed.
+
+        "EscapeFiltered"
+            By default, any filtered tags are outputted as
+            "<!--filtered-->". If "EscapeFiltered" is set to a true value,
+            then the filtered tags are converted to HTML entities.
+
+            For instance:
+
+              <br>  -->  &lt;br&gt;
+
+        "Rules"
+            The "Rules" option provides a very flexible way of customising
+            the filter.
+
+            The focus is safety-first, so it is applied after all of the
+            previous validation. This means that you cannot all malicious
+            data should already have been cleared.
+
+            Rules can be specified for tags and for attributes. Any tag or
+            attribute not explicitly listed will be handled by the default
+            "*" rules.
+
+            The following is a synopsis of all of the options that you can
+            use to configure rules. Below, an example is broken into
+            sections and explained.
+
+             Rules => {
+
+                 tag => 0 | 1 | sub { tag_callback }
+                        | {
+                            attr      => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+                            '*'       => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+                            required  => [qw(attrname attrname)],
+                            tag       => sub { tag_callback }
+                          },
+
+                '*' => 0 | 1 | sub { tag_callback }
+                       | {
+                           attr => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+                           '*'  => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+                           tag  => sub { tag_callback }
+                         }
+
+                }
+
+            EXAMPLE:
+
+                Rules => {
+
+                    ##########################
+                    ##### EXPLICIT RULES #####
+                    ##########################
+
+                    ## Allow <br> tags, reject <img> tags
+                    br          => 1,
+                    img         => 0,
+
+                    ## Send all <div> tags to a sub
+                    div         => sub { tag_callback },
+
+                    ## Allow <blockquote> tags,and allow the 'cite' attribute
+                    ## All other attributes are handled by the default C<*>
+                    blockquote  => {
+                        cite    => 1,
+                    },
+
+                    ## Allow <a> tags, and
+                    a  => {
+
+                        ## Allow the 'title' attribute
+                        title     => 1,
+
+                        ## Allow the 'href' attribute if it matches the regex
+                        href    =>   '^http://yourdomain.com'
+                   OR   href    => qr{^http://yourdomain.com},
+
+                        ## 'style' attributes are handled by a sub
+                        style     => sub { attr_callback },
+
+                        ## All other attributes are rejected
+                        '*'       => 0,
+
+                        ## Additionally, the <a> tag should be handled by this sub
+                        tag       => sub { tag_callback},
+
+                        ## If the <a> tag doesn't have these attributes, filter the tag
+                        required  => [qw(href title)],
+
+                    },
+
+                    ##########################
+                    ##### DEFAULT RULES #####
+                    ##########################
+
+                    ## The default '*' rule - accepts all the same options as above.
+                    ## If a tag or attribute is not mentioned above, then the default
+                    ## rule is applied:
+
+                    ## Reject all tags
+                    '*'         => 0,
+
+                    ## Allow all tags and all attributes
+                    '*'         => 1,
+
+                    ## Send all tags to the sub
+                    '*'         => sub { tag_callback },
+
+                    ## Allow all tags, reject all attributes
+                    '*'         => { '*'  => 0 },
+
+                    ## Allow all tags, and
+                    '*' => {
+
+                        ## Allow the 'title' attribute
+                        title   => 1,
+
+                        ## Allow the 'href' attribute if it matches the regex
+                        href    =>   '^http://yourdomain.com'
+                   OR   href    => qr{^http://yourdomain.com},
+
+                        ## 'style' attributes are handled by a sub
+                        style   => sub { attr_callback },
+
+                        ## All other attributes are rejected
+                        '*'     => 0,
+
+                        ## Additionally, all tags should be handled by this sub
+                        tag     => sub { tag_callback},
+
+                    },
+
+            Tag Callbacks
+                    sub tag_callback {
+                        my ($filter,$element) = (@_);
+
+                        $element = {
+                            tag      => 'tag',
+                            content  => 'inner_html',
+                            attr     => {
+                                attr_name => 'attr_value',
+                            }
+                        };
+                        return 0 | 1;
+                    }
+
+                A tag callback accepts two parameters, the $filter object
+                and the C$element>. It should return 0 to completely ignore
+                the tag and its content (which includes any nested HTML
+                tags), or 1 to accept and output the tag.
+
+                The $element is a hash ref containing the keys:
+
+            "tag"
+                This is the tagname in lowercase, eg "a", "br", "img". If
+                you set the tag value to an empty string, then the tag will
+                not be outputted, but the tag contents will.
+
+            "content"
+                This is the equivalent of DOM's innerHTML. It contains the
+                text content and any HTML tags contained within this
+                element. You can change the content or set it to an empty
+                string so that it is not outputted.
+
+            "attr"
+                "attr" contains a hashref containing the attribute names and
+                values
+
+            If for instance, you wanted to replace "<b>" tags with "<span>"
+            tags, you could do this:
+
+                sub b_callback {
+                    my ($filter,$element)  = @_;
+                    $element->{tag}        = 'span';
+                    $elemnt->{attr}{style} = 'font-weight:bold';
+                    return 1;
+                }
+
+        Attribute Callbacks
+                sub attr_callback {
+                    my ( $filter, $tag, $attr_name, $attr_val ) = @_;
+                    return undef | '' | 'value';
+                }
+
+            Attribute callbacks accept four parameters, the $filter object,
+            the $tag name, the $attr_name and the $attr_value.
+
+            It should return either "undef" to reject the attribute, or the
+            value to be used. An empty string keeps the attribute, but
+            without a value.
+
+        "BanList" vs "BanAllBut" vs "Rules"
+            It is not necessary to use "BanList" or "BanAllBut" - everything
+            can be done via "Rules", however it may be simpler to write:
+
+                BanAllBut => [qw(p div span)]
+
+            The logic works as follows:
+
+               * If BanAllBut exists, then ban everything but the tags in the list
+               * Add to the ban list any elements in BanList
+               * Any tags mentioned explicitly in Rules (eg a => 0, br => 1)
+                 are added or removed from the BanList
+               * A default rule of { '*' => 0 } would ban all tags except
+                 those mentioned in Rules
+               * A default rule of { '*' => 1 } would allow all tags except
+                 those disallowed in the ban list, or by explicit rules
 
 METHODS
     This class provides the following methods:
@@ -134,6 +366,10 @@ METHODS
         Returns the filtered document as a string.
 
 SUBCLASSING
+    The only reason for subclassing this module now is to add to the list of
+    accepted tags, attributes and styles (See "WHITELIST INITIALIZATION
+    METHODS"). Everything else can be achieved with "Rules".
+
     The "HTML::StripScripts" class is subclassable. Filter objects are plain
     hashes and "HTML::StripScripts" reserves only hash keys that start with
     "_hss". The filter configuration can be set up by invoking the
@@ -184,6 +420,11 @@ OUTPUT METHODS
         default implementation appends the text to the string that the
         filtered_document() method will return.
 
+    output_stack_entry ( TEXT )
+        This method is invoked when a tag plus all text and nested HTML
+        content within the tag has been processed. It adds the tag plus its
+        content to the content for its parent tag.
+
 REJECT METHODS
     When the filter encounters something in the input document which it
     cannot transform into an acceptable construct, it invokes one of the
@@ -193,7 +434,8 @@ REJECT METHODS
     The TEXT parameter is the full text of the unacceptable construct.
 
     The default implementations of these methods output an HTML comment
-    containing the text "filtered".
+    containing the text "filtered". If "EscapeFiltered" is set to true, then
+    the rejected text is HTML escaped instead.
 
     Subclasses may override these methods, but should exercise caution. The
     TEXT parameter is unfiltered input and may contain malicious constructs.
@@ -312,7 +554,8 @@ CHARACTER DATA PROCESSING
         the handler subs in the "AttVal" whitelist.
 
         The default behavior is the same as that of
-        text_to_canonical_form().
+        "text_to_canonical_form()", plus it converts any CR, LF or TAB
+        characters to spaces.
 
     unquoted_to_canonical_form ( VALUE )
         This method is used to reduce attribute values without quotes to
@@ -323,14 +566,6 @@ CHARACTER DATA PROCESSING
         "&amp;", since that corresponds with the way most browsers treat
         entities in unquoted values.
 
-    canonical_form_to_attval ( ATTVAL )
-        This method is used to convert the text in canonical form returned
-        by the "AttVal" handler subs to a form suitable for inclusion in
-        doublequotes in the output tag.
-
-        The default implementation runs anything that doesn't look like a
-        valid entity through the escape_html_metachars() method.
-
     canonical_form_to_text ( TEXT )
         This method is used to convert the text in canonical form returned
         by the filter_text() method to a form suitable for inclusion in the
@@ -338,6 +573,15 @@ CHARACTER DATA PROCESSING
 
         The default implementation runs anything that doesn't look like a
         valid entity through the escape_html_metachars() method.
+
+    canonical_form_to_attval ( ATTVAL )
+        This method is used to convert the text in canonical form returned
+        by the "AttVal" handler subs to a form suitable for inclusion in
+        doublequotes in the output tag.
+
+        The default implementation converts CR, LF and TAB characters to a
+        single space, and runs anything that doesn't look like a valid
+        entity through the escape_html_metachars() method.
 
     validate_href_attribute ( TEXT )
         If the "AllowHref" filter configuration option is set, then this
@@ -349,6 +593,22 @@ CHARACTER DATA PROCESSING
         The default implementation allows only absolute "http" and "https"
         URLs, permits port numbers and query strings, and imposes reasonable
         length limits.
+
+        It does not URI escape the query string, and it does not guarantee
+        properly formatted URIs, it just tries to give safe URIs. You can
+        always use an attribute callback (see "Attribute Callbacks") to
+        provide stricter handling.
+
+    validate_mailto ( TEXT )
+        If the "AllowMailto" filter configuration option is set, then this
+        method is used to validate "href" type attribute values which begin
+        with "mailto:". TEXT is the attribute value in canonical form.
+        Returns a possibly modified attribute value (in canonical form) or
+        "undef" to reject the attribute.
+
+        This uses a lightweight regex and does not guarantee that email
+        addresses are properly formatted. You can always use an attribute
+        callback (see "Attribute Callbacks") to provide stricter handling.
 
     validate_src_attribute ( TEXT )
         If the "AllowSrc" filter configuration option is set, then this
@@ -467,6 +727,34 @@ PRIVATE METHODS
     invoked from elsewhere. Subclasses should not use or override these
     methods.
 
+    _hss_prepare_ban_list (CFG)
+        Returns a hash ref representing all the banned tags, based on the
+        values of BanList and BanAllBut
+
+    _hss_prepare_rules (CFG)
+        Returns a hash ref representing the tag and attribute rules (See
+        "Rules").
+
+        Returns undef if no filters are specified, in which case the
+        attribute filter code has very little performance impact. If any
+        rules are specified, then every tag and attribute is checked.
+
+    _hss_get_attr_filter ( DEFAULT_FILTERS TAG_FILTERS ATTR_NAME)
+        Returns the attribute filter rule to apply to this particular
+        attribute.
+
+        Checks for:
+
+          - a named attribute rule in a named tag
+          - a default * attribute rule in a named tag
+          - a named attribute rule in the default * rules
+          - a default * attribute rule in the default * rules
+
+    _hss_join_attribs (FILTERED_ATTRIBS)
+        Accepts a hash ref containing the attribute names as the keys, and
+        the attribute values as the values. Escapes them and returns a
+        string ready for output to HTML
+
     _hss_decode_numeric ( NUMERIC )
         Returns the string that should replace the numeric entity NUMERIC in
         the text_to_canonical_form() method.
@@ -500,22 +788,38 @@ PRIVATE METHODS
         Returns true if the lowercase tag name TAG is valid in the filter's
         current context, false otherwise.
 
-BUGS
-    *   This module does a lot of work to ensure that tags are correctly
+BUGS AND LIMITATIONS
+    Performance
+        This module does a lot of work to ensure that tags are correctly
         nested and are not left open, causing unnecessary overhead for
         applications where that doesn't matter.
 
         Such applications may benefit from using the more lightweight
         HTML::Scrubber::StripScripts module instead.
 
+    Strictness
+        URIs and email addresses are cleaned up to be safe, but not
+        necessarily accurate. That would have required adding dependencies.
+        Attribute callbacks can be used to add this functionality if
+        required, or the validation methods can be overriden.
+
+        By default, filtered HTML may not be valid strict XHTML, for
+        instance empty required attributes may be outputted. However, with
+        "Rules", it should be possible to force the HTML to validate.
+
 SEE ALSO
     HTML::Parser, HTML::StripScripts::Parser, HTML::StripScripts::Regex
 
 AUTHOR
-    Nick Cleaton <nick@cleaton.net>
+    Original author Nick Cleaton <nick@cleaton.net>
+
+    New code added and module maintained by Clinton Gormley
+    <clint@traveljury.com>
 
 COPYRIGHT
     Copyright (C) 2003 Nick Cleaton. All Rights Reserved.
+
+    Copyright (C) 2007 Clinton Gormley. All Rights Reserved.
 
     This module is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.

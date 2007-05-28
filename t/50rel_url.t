@@ -32,6 +32,6 @@ sub mytest {
     $f->input_start($in);
     $f->input_text('x');
     $f->input_end_document;
-    is( $f->filtered_document, $out, ($allow_rel ? 'yes' : 'no') . "rel $name" );
+    is( $f->filtered_document, $out, ($allow_rel ? 'yes' : 'no') . " rel $name" );
 }
 

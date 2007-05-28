@@ -1,8 +1,9 @@
 package HTML::StripScripts;
 use strict;
+use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '0.03';
+$VERSION = '0.90';
 
 =head1 NAME
 
@@ -31,6 +32,9 @@ much non-scripting markup in place as possible.  This allows web
 applications to display HTML originating from an untrusted source
 without introducing XSS (cross site scripting) vulnerabilities.
 
+You will probably use L<HTML::StripScripts::Parser> rather than using
+this module directly.
+
 The process is based on whitelists of tags, attributes and attribute
 values.  This approach is the most secure against disguised scripting
 constructs hidden in malicious HTML documents.
@@ -38,6 +42,10 @@ constructs hidden in malicious HTML documents.
 As well as removing scripting constructs, this module ensures that
 there is a matching end for each start tag, and that the tags are
 properly nested.
+
+Previously, in order to customise the output, you needed to subclass
+C<HTML::StripScripts> and override methods.  Now, most customisation
+can be done through the C<Rules> option provided to C<new()>.
 
 The HTML document must be parsed into start tags, end tags and
 text before it can be filtered by this module.  Use either
@@ -54,6 +62,18 @@ Creates a new C<HTML::StripScripts> filter object, bound to a
 particular filtering policy.  If present, the CONFIG parameter
 must be a hashref.  The following keys are recognized (unrecognized
 keys will be silently ignored).
+
+    $s = HTML::Stripscripts->new({
+        Context         => 'Document|Flow|Inline|NoTags',
+        BanList         => [qw( br img )] | {br => '1', img => '1'},
+        BanAllBut       => [qw(p div span)],
+        AllowSrc        => 0|1,
+        AllowHref       => 0|1,
+        AllowRelURL     => 0|1,
+        AllowMailto     => 0|1,
+        EscapeFiltered  => 0|1,
+        Rules           => { See below for details },
+    });
 
 =over
 
@@ -94,9 +114,9 @@ The default C<Context> value is C<Flow>.
 
 =item C<BanList>
 
-If present, this option must be a hashref.  Any tag that would normally
-be allowed (because it presents no XSS hazard) will be blocked if the
-lowercase name of the tag is a key in this hash.
+If present, this option must be an arrayref or a hashref.  Any tag that
+would normally be allowed (because it presents no XSS hazard) will be
+blocked if the lowercase name of the tag is in this list.
 
 For example, in a guestbook application where C<HR> tags are used to
 separate posts, you may wish to prevent posts from including C<HR>
@@ -126,14 +146,230 @@ type of construct.
 
 By default, the filter won't allow relative URLs such as C<../foo.html>
 in C<SRC> and C<HREF> attribute values.  Set this option to a true value
-to allow them.
+to allow them. C<AllowHref> and / or C<AllowSrc> also need to be set to true
+for this to have any effect.
+
+=item C<AllowMailto>
+
+By default, C<mailto:> links are not allowed. If C<AllowMailto> is set to
+a true value, then this construct will be allowed.
+
+=item C<EscapeFiltered>
+
+By default, any filtered tags are outputted as C<< <!--filtered--> >>. If
+C<EscapeFiltered> is set to a true value, then the filtered tags are converted
+to HTML entities.
+
+For instance:
+
+  <br>  -->  &lt;br&gt;
+
+=item C<Rules>
+
+The C<Rules> option provides a very flexible way of customising the filter.
+
+The focus is safety-first, so it is applied after all of the previous validation.
+This means that you cannot all malicious data should already have been cleared.
+
+Rules can be specified for tags and for attributes. Any tag or attribute
+not explicitly listed will be handled by the default C<*> rules.
+
+The following is a synopsis of all of the options that you can use to
+configure rules.  Below, an example is broken into sections and explained.
+
+ Rules => {
+
+     tag => 0 | 1 | sub { tag_callback }
+            | {
+                attr      => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+                '*'       => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+                required  => [qw(attrname attrname)],
+                tag       => sub { tag_callback }
+              },
+
+    '*' => 0 | 1 | sub { tag_callback }
+           | {
+               attr => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+               '*'  => 0 | 1 | 'regex' | qr/regex/ | sub { attr_callback},
+               tag  => sub { tag_callback }
+             }
+
+    }
+
+EXAMPLE:
+
+    Rules => {
+
+        ##########################
+        ##### EXPLICIT RULES #####
+        ##########################
+
+        ## Allow <br> tags, reject <img> tags
+        br          => 1,
+        img         => 0,
+
+        ## Send all <div> tags to a sub
+        div         => sub { tag_callback },
+
+        ## Allow <blockquote> tags,and allow the 'cite' attribute
+        ## All other attributes are handled by the default C<*>
+        blockquote  => {
+            cite    => 1,
+        },
+
+        ## Allow <a> tags, and
+        a  => {
+
+            ## Allow the 'title' attribute
+            title     => 1,
+
+            ## Allow the 'href' attribute if it matches the regex
+            href    =>   '^http://yourdomain.com'
+       OR   href    => qr{^http://yourdomain.com},
+
+            ## 'style' attributes are handled by a sub
+            style     => sub { attr_callback },
+
+            ## All other attributes are rejected
+            '*'       => 0,
+
+            ## Additionally, the <a> tag should be handled by this sub
+            tag       => sub { tag_callback},
+
+            ## If the <a> tag doesn't have these attributes, filter the tag
+            required  => [qw(href title)],
+
+        },
+
+        ##########################
+        ##### DEFAULT RULES #####
+        ##########################
+
+        ## The default '*' rule - accepts all the same options as above.
+        ## If a tag or attribute is not mentioned above, then the default
+        ## rule is applied:
+
+        ## Reject all tags
+        '*'         => 0,
+
+        ## Allow all tags and all attributes
+        '*'         => 1,
+
+        ## Send all tags to the sub
+        '*'         => sub { tag_callback },
+
+        ## Allow all tags, reject all attributes
+        '*'         => { '*'  => 0 },
+
+        ## Allow all tags, and
+        '*' => {
+
+            ## Allow the 'title' attribute
+            title   => 1,
+
+            ## Allow the 'href' attribute if it matches the regex
+            href    =>   '^http://yourdomain.com'
+       OR   href    => qr{^http://yourdomain.com},
+
+            ## 'style' attributes are handled by a sub
+            style   => sub { attr_callback },
+
+            ## All other attributes are rejected
+            '*'     => 0,
+
+            ## Additionally, all tags should be handled by this sub
+            tag     => sub { tag_callback},
+
+        },
+
+=over
+
+=item Tag Callbacks
+
+    sub tag_callback {
+        my ($filter,$element) = (@_);
+
+        $element = {
+            tag      => 'tag',
+            content  => 'inner_html',
+            attr     => {
+                attr_name => 'attr_value',
+            }
+        };
+        return 0 | 1;
+    }
+
+A tag callback accepts two parameters, the C<$filter> object and the C$element>.
+It should return C<0> to completely ignore the tag and its content (which includes
+any nested HTML tags), or C<1> to accept and output the tag.
+
+The C<$element> is a hash ref containing the keys:
+
+=item C<tag>
+
+This is the tagname in lowercase, eg C<a>, C<br>, C<img>. If you set
+the tag value to an empty string, then the tag will not be outputted, but
+the tag contents will.
+
+=item C<content>
+
+This is the equivalent of DOM's innerHTML. It contains the text content
+and any HTML tags contained within this element. You can change the content
+or set it to an empty string so that it is not outputted.
+
+=item C<attr>
+
+C<attr> contains a hashref containing the attribute names and values
+
+=back
+
+If for instance, you wanted to replace C<< <b> >> tags with C<< <span> >> tags,
+you could do this:
+
+    sub b_callback {
+        my ($filter,$element)  = @_;
+        $element->{tag}        = 'span';
+        $elemnt->{attr}{style} = 'font-weight:bold';
+        return 1;
+    }
+
+=item Attribute Callbacks
+
+    sub attr_callback {
+        my ( $filter, $tag, $attr_name, $attr_val ) = @_;
+        return undef | '' | 'value';
+    }
+
+Attribute callbacks accept four parameters, the C<$filter> object, the C<$tag>
+name, the C<$attr_name> and the C<$attr_value>.
+
+It should return either C<undef> to reject the attribute, or the value to be
+used. An empty string keeps the attribute, but without a value.
+
+=item C<BanList> vs C<BanAllBut> vs C<Rules>
+
+It is not necessary to use C<BanList> or C<BanAllBut> - everything can be done
+via C<Rules>, however it may be simpler to write:
+
+    BanAllBut => [qw(p div span)]
+
+The logic works as follows:
+
+   * If BanAllBut exists, then ban everything but the tags in the list
+   * Add to the ban list any elements in BanList
+   * Any tags mentioned explicitly in Rules (eg a => 0, br => 1)
+     are added or removed from the BanList
+   * A default rule of { '*' => 0 } would ban all tags except
+     those mentioned in Rules
+   * A default rule of { '*' => 1 } would allow all tags except
+     those disallowed in the ban list, or by explicit rules
 
 =back
 
 =cut
 
 sub new {
-    my ($pkg, $cfg) = @_;
+    my ( $pkg, $cfg ) = @_;
 
     my $self = bless {}, ref $pkg || $pkg;
     $self->hss_init($cfg);
@@ -141,7 +377,7 @@ sub new {
 }
 
 sub hss_init {
-    my ($self, $cfg) = @_;
+    my ( $self, $cfg ) = @_;
     $cfg ||= {};
 
     $self->{_hssCfg} = $cfg;
@@ -151,15 +387,8 @@ sub hss_init {
     $self->{_hssAttVal}  = $self->init_attval_whitelist;
     $self->{_hssStyle}   = $self->init_style_whitelist;
     $self->{_hssDeInter} = $self->init_deinter_whitelist;
-
-    $self->{_hssBanList} = $cfg->{BanList} || {};
-    if ( $cfg->{BanAllBut} ) {
-        my %ban = map {$_ => 1} keys %{ $self->{_hssAttrib} };
-        foreach my $dontban (@{ $cfg->{BanAllBut} }) {
-            delete $ban{$dontban} unless $self->{_hssBanList}{$dontban};
-        }
-        $self->{_hssBanList} = \%ban;
-    }
+    $self->{_hssBanList} = $self->_hss_prepare_ban_list($cfg);
+    $self->{_hssRules}   = $self->_hss_prepare_rules($cfg);
 }
 
 =back
@@ -178,13 +407,14 @@ starting on each HTML document to be filtered.
 =cut
 
 sub input_start_document {
-    my ($self, $context) = @_;
+    my ( $self, $context ) = @_;
 
-    $self->{_hssStack} = [{
-        NAME => '',
-        FULL => '',
-        CTX  => $self->{_hssCfg}{Context} || 'Flow',
-    }];
+    $self->{_hssStack} = [ { NAME    => '',
+                             FULL    => '',
+                             CTX     => $self->{_hssCfg}{Context} || 'Flow',
+                             CONTENT => '',
+                           }
+    ];
     $self->{_hssOutput} = '';
 
     $self->output_start_document;
@@ -198,21 +428,21 @@ full text of the tag, including angle-brackets.
 =cut
 
 sub input_start {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $self->_hss_accept_input_start($text) or $self->reject_start($text);
 }
 
 sub _hss_accept_input_start {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     return 0 unless $text =~ m|^<([a-zA-Z0-9]+)\b(.*)>$|m;
-    my ($tag, $attr) = (lc $1, $self->strip_nonprintable($2));
+    my ( $tag, $attr ) = ( lc $1, $self->strip_nonprintable($2) );
 
     return 0 if $self->{_hssSkipToEnd};
-    if ($tag eq 'script' or $tag eq 'style') {
+    if ( $tag eq 'script' or $tag eq 'style' ) {
         $self->{_hssSkipToEnd} = $tag;
-	return 0;
+        return 0;
     }
 
     return 0 if $self->_hss_tag_is_banned($tag);
@@ -222,42 +452,78 @@ sub _hss_accept_input_start {
 
     return 0 unless $self->_hss_get_to_valid_context($tag);
 
-    my $filtered_attr = '';
-    while ($attr =~ s#^\s*(\w+)(?:\s*=\s*(?:([^"'>\s]+)|"([^"]*)"|'([^']*)'))?##) {
+    my $default_filters = $self->{_hssRules}{'*'};
+    my $tag_filters     = $self->{_hssRules}{$tag}
+        || $default_filters;
+
+    my %filtered_attr;
+    while ( $attr
+            =~ s#^\s*(\w+)(?:\s*=\s*(?:([^"'>\s]+)|"([^"]*)"|'([^']*)'))?## )
+    {
         my $key = lc $1;
-        my $val = ( defined $2 ? $self->unquoted_to_canonical_form($2) :
-                    defined $3 ? $self->quoted_to_canonical_form($3)   :
-                    defined $4 ? $self->quoted_to_canonical_form($4)   :
-                    ''
-                  );
+        my $val = (   defined $2 ? $self->unquoted_to_canonical_form($2)
+                    : defined $3 ? $self->quoted_to_canonical_form($3)
+                    : defined $4 ? $self->quoted_to_canonical_form($4)
+                    : ''
+        );
 
         my $value_class = $allowed_attr->{$key};
         next unless defined $value_class;
+
         my $attval_handler = $self->{_hssAttVal}{$value_class};
         next unless defined $attval_handler;
 
-        my $filtered_value = &{ $attval_handler }($self, $tag, $key, $val);
+        my $attr_filter;
+        if ($tag_filters) {
+            $attr_filter =
+                $self->_hss_get_attr_filter( $default_filters, $tag_filters,
+                                             $key );
 
-        if (defined $filtered_value) {
-            my $escaped = $self->canonical_form_to_attval($filtered_value);
-            $filtered_attr .= qq| $key="$escaped"|;
+            # filter == 0
+            next unless $attr_filter;
+        }
+
+        my $filtered_value = &{$attval_handler}( $self, $tag, $key, $val );
+        next unless defined $filtered_value;
+
+        # send value to filter if sub
+        if ( $tag_filters && ref $attr_filter ) {
+            $filtered_value
+                = $attr_filter->( $self, $tag, $key, $filtered_value );
+            next unless defined $filtered_value;
+        }
+
+        $filtered_attr{$key} = $filtered_value;
+
+    }
+
+    # Check required attributes
+    if ( my $required = $tag_filters->{required} ) {
+        foreach my $key (@$required) {
+            return 0
+                unless length( $filtered_attr{$key} || '' );
         }
     }
 
-    my $new_context =
-        $self->{_hssContext}{ $self->{_hssStack}[0]{CTX} }{ $tag };
+    # Check for callback
+    my $tag_callback = $tag_filters && $tag_filters->{tag}
+        || $default_filters->{tag};
 
-    if ($new_context eq 'EMPTY') {
-        $self->output_start("<$tag$filtered_attr />");
+    my $new_context
+        = $self->{_hssContext}{ $self->{_hssStack}[0]{CTX} }{$tag};
+
+    my %stack_entry = ( NAME     => $tag,
+                        ATTR     => \%filtered_attr,
+                        CTX      => $new_context,
+                        CALLBACK => $tag_callback,
+                        CONTENT  => '',
+    );
+    if ( $new_context eq 'EMPTY' ) {
+        $self->output_stack_entry( \%stack_entry );
     }
     else {
-        my $html = "<$tag$filtered_attr>";
-        unshift @{ $self->{_hssStack} }, {
-           NAME => $tag,
-           FULL => $html,
-           CTX  => $new_context
-        };
-        $self->output_start($html);
+        unshift @{ $self->{_hssStack} }, \%stack_entry;
+
     }
 
     return 1;
@@ -271,46 +537,44 @@ full text of the end tag, including angle-brackets.
 =cut
 
 sub input_end {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $self->_hss_accept_input_end($text) or $self->reject_end($text);
 }
 
 sub _hss_accept_input_end {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     return 0 unless $text =~ m#^</(\w+)>$#;
     my $tag = lc $1;
 
-    if ($self->{_hssSkipToEnd}) {
-        if ($self->{_hssSkipToEnd} eq $tag) {
+    if ( $self->{_hssSkipToEnd} ) {
+        if ( $self->{_hssSkipToEnd} eq $tag ) {
             delete $self->{_hssSkipToEnd};
         }
         return 0;
     }
 
     # Ignore a close without an open
-    return 0 unless grep {$_->{NAME} eq $tag} @{ $self->{_hssStack} };
+    return 0 unless grep { $_->{NAME} eq $tag } @{ $self->{_hssStack} };
 
     # Close open tags up to the matching open
     my @close = ();
-    while (scalar @{ $self->{_hssStack} } and $self->{_hssStack}[0]{NAME} ne $tag) {
-        push @close, shift @{ $self->{_hssStack} };
-    }
-    push @close, shift @{ $self->{_hssStack} };
 
-    foreach my $tag (@close) {
-        $self->output_end('</' . $tag->{NAME} . '>');
+    while ( scalar @{ $self->{_hssStack} } ) {
+        my $entry = shift @{ $self->{_hssStack} };
+        push @close, $entry;
+        $self->output_stack_entry($entry);
+        $entry->{CONTENT} = '';
+        last if $entry->{NAME} eq $tag;
     }
 
     # Reopen any we closed early if all that were closed are
     # configured to be auto de-interleaved.
-    unless (grep {! $self->{_hssDeInter}{$_->{NAME}} } @close) {
+    unless ( grep { !$self->{_hssDeInter}{ $_->{NAME} } } @close ) {
         pop @close;
+
         unshift @{ $self->{_hssStack} }, @close;
-        foreach my $reopen (reverse @close) {
-            $self->output_start($reopen->{FULL});
-        }
     }
 
     return 1;
@@ -323,7 +587,7 @@ Handles some non-tag text from the input document.
 =cut
 
 sub input_text {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     return if $self->{_hssSkipToEnd};
 
@@ -340,7 +604,7 @@ sub input_text {
     }
 
     my $filtered = $self->filter_text( $self->text_to_canonical_form($text) );
-    $self->output_text( $self->canonical_form_to_text( $filtered ) );
+    $self->output_text( $self->canonical_form_to_text($filtered) );
 }
 
 =item input_process ( TEXT )
@@ -350,7 +614,7 @@ Handles a processing instruction from the input document.
 =cut
 
 sub input_process {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $self->reject_process($text);
 }
@@ -362,7 +626,7 @@ Handles an HTML comment from the input document.
 =cut
 
 sub input_comment {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $self->reject_comment($text);
 }
@@ -374,7 +638,7 @@ Handles an declaration from the input document.
 =cut
 
 sub input_declaration {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $self->reject_declaration($text);
 }
@@ -390,13 +654,15 @@ sub input_end_document {
 
     delete $self->{_hssSkipToEnd};
 
-    pop @{ $self->{_hssStack} };
-    foreach my $leftopen (@{ $self->{_hssStack} }) {
-        $self->output_end('</' . $leftopen->{NAME} . '>');
+    while ( @{ $self->{_hssStack} } > 1 ) {
+        $self->output_stack_entry( shift @{ $self->{_hssStack} } );
     }
-    delete $self->{_hssStack};
 
     $self->output_end_document;
+    my $last_entry = shift @{ $self->{_hssStack} };
+    $self->{_hssOutput} = $last_entry->{CONTENT};
+    delete $self->{_hssStack};
+
 }
 
 =item filtered_document ()
@@ -413,7 +679,14 @@ sub filtered_document {
 
 =back
 
+=cut
+
 =head1 SUBCLASSING
+
+The only reason for subclassing this module now is to add to the
+list of accepted tags, attributes and styles (See
+L</"WHITELIST INITIALIZATION METHODS">).  Everything else can be
+achieved with L</"Rules">.
 
 The C<HTML::StripScripts> class is subclassable.  Filter objects are plain
 hashes and C<HTML::StripScripts> reserves only hash keys that start with
@@ -444,7 +717,7 @@ through the filter.  The default implementation does nothing.
 
 =cut
 
-sub output_start_document {}
+sub output_start_document { }
 
 =item output_end_document ()
 
@@ -461,7 +734,7 @@ This method is used to output a filtered start tag.
 
 =cut
 
-sub output_start          { $_[0]->output($_[1]) }
+sub output_start { $_[0]->output( $_[1] ) }
 
 =item output_end ( TEXT )
 
@@ -511,10 +784,47 @@ filtered_document() method will return.
 
 =cut
 
-sub output {
-    my ($self, $text) = @_;
+sub output { $_[0]->{_hssStack}[0]{CONTENT} .= $_[1]; }
 
-    $self->{_hssOutput} .= $text;
+=item output_stack_entry ( TEXT )
+
+This method is invoked when a tag plus all text and nested HTML content
+within the tag has been processed. It adds the tag plus its content
+to the content for its parent tag.
+
+=cut
+
+
+sub output_stack_entry {
+    my ( $self, $tag ) = @_;
+
+    my %entry;
+    @entry{qw(tag attr content)} = @{$tag}{qw(NAME ATTR CONTENT)};
+
+    if ( my $tag_callback = $tag->{CALLBACK} ) {
+        $tag_callback->( $self, \%entry )
+            or return;
+    }
+
+    my $tagname        = $entry{tag};
+    my $filtered_attrs = $self->_hss_join_attribs( $entry{attr} );
+
+    if ( $tag->{CTX} eq 'EMPTY' ) {
+        $self->output_start("<$tagname$filtered_attrs />")
+            if $entry{tag};
+        return;
+    }
+    if ($tagname) {
+        $self->output_start("<$tagname$filtered_attrs>");
+    }
+
+    if ( $entry{content} ) {
+        $self->{_hssStack}[0]{CONTENT} .= $entry{content};
+    }
+
+    if ($tagname) {
+        $self->output_end("</$tagname>");
+    }
 }
 
 =back
@@ -529,7 +839,8 @@ document to take the place of the unacceptable construct.
 The TEXT parameter is the full text of the unacceptable construct.
 
 The default implementations of these methods output an HTML comment
-containing the text C<filtered>.
+containing the text C<filtered>. If L</"EscapeFiltered">
+is set to true, then the rejected text is HTML escaped instead.
 
 Subclasses may override these methods, but should exercise caution.
 The TEXT parameter is unfiltered input and may contain malicious
@@ -553,13 +864,16 @@ constructs.
 
 =cut
 
-sub reject_start { $_[0]->output_comment('<!--filtered-->'); }
+sub reject_start {
+    $_[0]->{_hssCfg}{EscapeFiltered}
+        ? $_[0]->output_text( $_[0]->escape_html_metachars( $_[1] ) )
+        : $_[0]->output_comment('<!--filtered-->');
+}
 *reject_end         = \&reject_start;
 *reject_text        = \&reject_start;
 *reject_declaration = \&reject_start;
 *reject_comment     = \&reject_start;
 *reject_process     = \&reject_start;
-
 
 =head1 WHITELIST INITIALIZATION METHODS
 
@@ -596,98 +910,92 @@ nothing can be nested within that tag.
 =cut
 
 use vars qw(%_Context);
+
 BEGIN {
 
-    my %pre_content = (
-      'br'      => 'EMPTY',
-      'span'    => 'Inline',
-      'tt'      => 'Inline',
-      'i'       => 'Inline',
-      'b'       => 'Inline',
-      'u'       => 'Inline',
-      's'       => 'Inline',
-      'strike'  => 'Inline',
-      'em'      => 'Inline',
-      'strong'  => 'Inline',
-      'dfn'     => 'Inline',
-      'code'    => 'Inline',
-      'q'       => 'Inline',
-      'samp'    => 'Inline',
-      'kbd'     => 'Inline',
-      'var'     => 'Inline',
-      'cite'    => 'Inline',
-      'abbr'    => 'Inline',
-      'acronym' => 'Inline',
-      'ins'     => 'Inline',
-      'del'     => 'Inline',
-      'a'       => 'Inline',
-      'CDATA'   => 'CDATA',
+    my %pre_content = ( 'br'      => 'EMPTY',
+                        'span'    => 'Inline',
+                        'tt'      => 'Inline',
+                        'i'       => 'Inline',
+                        'b'       => 'Inline',
+                        'u'       => 'Inline',
+                        's'       => 'Inline',
+                        'strike'  => 'Inline',
+                        'em'      => 'Inline',
+                        'strong'  => 'Inline',
+                        'dfn'     => 'Inline',
+                        'code'    => 'Inline',
+                        'q'       => 'Inline',
+                        'samp'    => 'Inline',
+                        'kbd'     => 'Inline',
+                        'var'     => 'Inline',
+                        'cite'    => 'Inline',
+                        'abbr'    => 'Inline',
+                        'acronym' => 'Inline',
+                        'ins'     => 'Inline',
+                        'del'     => 'Inline',
+                        'a'       => 'Inline',
+                        'CDATA'   => 'CDATA',
     );
 
-    my %inline = (
-      %pre_content,
-      'img'   => 'EMPTY',
-      'big'   => 'Inline',
-      'small' => 'Inline',
-      'sub'   => 'Inline',
-      'sup'   => 'Inline',
-      'font'  => 'Inline',
-      'nobr'  => 'Inline',
+    my %inline = ( %pre_content,
+                   'img'   => 'EMPTY',
+                   'big'   => 'Inline',
+                   'small' => 'Inline',
+                   'sub'   => 'Inline',
+                   'sup'   => 'Inline',
+                   'font'  => 'Inline',
+                   'nobr'  => 'Inline',
     );
 
-    my %flow = (
-      %inline,
-      'ins'        => 'Flow',
-      'del'        => 'Flow',
-      'div'        => 'Flow',
-      'p'          => 'Inline',
-      'h1'         => 'Inline',
-      'h2'         => 'Inline',
-      'h3'         => 'Inline',
-      'h4'         => 'Inline',
-      'h5'         => 'Inline',
-      'h6'         => 'Inline',
-      'ul'         => 'list',
-      'ol'         => 'list',
-      'menu'       => 'list',
-      'dir'        => 'list',
-      'dl'         => 'dt_dd',
-      'address'    => 'Inline',
-      'hr'         => 'EMPTY',
-      'pre'        => 'pre.content',
-      'blockquote' => 'Flow',
-      'center'     => 'Flow',
-      'table'      => 'table',
+    my %flow = ( %inline,
+                 'ins'        => 'Flow',
+                 'del'        => 'Flow',
+                 'div'        => 'Flow',
+                 'p'          => 'Inline',
+                 'h1'         => 'Inline',
+                 'h2'         => 'Inline',
+                 'h3'         => 'Inline',
+                 'h4'         => 'Inline',
+                 'h5'         => 'Inline',
+                 'h6'         => 'Inline',
+                 'ul'         => 'list',
+                 'ol'         => 'list',
+                 'menu'       => 'list',
+                 'dir'        => 'list',
+                 'dl'         => 'dt_dd',
+                 'address'    => 'Inline',
+                 'hr'         => 'EMPTY',
+                 'pre'        => 'pre.content',
+                 'blockquote' => 'Flow',
+                 'center'     => 'Flow',
+                 'table'      => 'table',
     );
 
-    my %table = (
-      'caption'  => 'Inline',
-      'thead'    => 'tr_only',
-      'tfoot'    => 'tr_only',
-      'tbody'    => 'tr_only',
-      'colgroup' => 'colgroup',
-      'col'      => 'EMPTY',
-      'tr'       => 'th_td',
+    my %table = ( 'caption'  => 'Inline',
+                  'thead'    => 'tr_only',
+                  'tfoot'    => 'tr_only',
+                  'tbody'    => 'tr_only',
+                  'colgroup' => 'colgroup',
+                  'col'      => 'EMPTY',
+                  'tr'       => 'th_td',
     );
 
-    my %head = (
-      'title'  => 'NoTags',
-    );
+    my %head = ( 'title' => 'NoTags', );
 
-    %_Context = (
-      'Document'    => { 'html' => 'Html' },
-      'Html'        => { 'head' => 'Head', 'body' => 'Flow' },
-      'Head'        => \%head,
-      'Inline'      => \%inline,
-      'Flow'        => \%flow,
-      'NoTags'      => { 'CDATA' => 'CDATA' },
-      'pre.content' => \%pre_content,
-      'table'       => \%table,
-      'list'        => { 'li' => 'Flow' },
-      'dt_dd'       => { 'dt' => 'Inline', 'dd' => 'Flow' },
-      'tr_only'     => { 'tr' => 'th_td' },
-      'colgroup'    => { 'col' => 'EMPTY' },
-      'th_td'       => { 'th' => 'Flow', 'td' => 'Flow' },
+    %_Context = ( 'Document' => { 'html' => 'Html' },
+                  'Html'     => { 'head' => 'Head', 'body' => 'Flow' },
+                  'Head'        => \%head,
+                  'Inline'      => \%inline,
+                  'Flow'        => \%flow,
+                  'NoTags'      => { 'CDATA' => 'CDATA' },
+                  'pre.content' => \%pre_content,
+                  'table'       => \%table,
+                  'list'        => { 'li' => 'Flow' },
+                  'dt_dd'       => { 'dt' => 'Inline', 'dd' => 'Flow' },
+                  'tr_only'  => { 'tr'  => 'th_td' },
+                  'colgroup' => { 'col' => 'EMPTY' },
+                  'th_td'    => { 'th'  => 'Flow', 'td' => 'Flow' },
     );
 }
 
@@ -709,177 +1017,168 @@ attribute can take, such as C<color> or C<number>.
 =cut
 
 use vars qw(%_Attrib);
+
 BEGIN {
 
     my %attr = ( 'style' => 'style' );
 
-    my %font_attr = (
-      %attr,
-      'size'  => 'size',
-      'face'  => 'wordlist',
-      'color' => 'color',
+    my %font_attr = ( %attr,
+                      'size'  => 'size',
+                      'face'  => 'wordlist',
+                      'color' => 'color',
     );
 
-    my %insdel_attr = (
-      %attr,
-      'cite'     => 'href',
-      'datetime' => 'text',
+    my %insdel_attr = ( %attr,
+                        'cite'     => 'href',
+                        'datetime' => 'text',
     );
 
-    my %texta_attr = (
-      %attr,
-      'align' => 'word',
+    my %texta_attr = ( %attr, 'align' => 'word', );
+
+    my %cellha_attr = ( 'align'   => 'word',
+                        'char'    => 'word',
+                        'charoff' => 'size',
     );
 
-    my %cellha_attr = (
-      'align'    => 'word',
-      'char'     => 'word',
-      'charoff'  => 'size',
-    );
-
-    my %cellva_attr = (
-      'valign' => 'word',
-    );
+    my %cellva_attr = ( 'valign' => 'word', );
 
     my %cellhv_attr = ( %attr, %cellha_attr, %cellva_attr );
 
-    my %col_attr = (
-      %attr, %cellhv_attr,
-      'width' => 'size',
-      'span'  => 'number',
+    my %col_attr = ( %attr, %cellhv_attr,
+                     'width' => 'size',
+                     'span'  => 'number',
     );
 
-    my %thtd_attr = (
-      %attr,
-      'abbr'             => 'text',
-      'axis'             => 'text',
-      'headers'          => 'text',
-      'scope'            => 'word',
-      'rowspan'          => 'number',
-      'colspan'          => 'number',
-      %cellhv_attr,
-      'nowrap'           => 'novalue',
-      'bgcolor'          => 'color',
-      'width'            => 'size',
-      'height'           => 'size',
-      'bordercolor'      => 'color',
-      'bordercolorlight' => 'color',
-      'bordercolordark'  => 'color',
+    my %thtd_attr = ( %attr,
+                      'abbr'    => 'text',
+                      'axis'    => 'text',
+                      'headers' => 'text',
+                      'scope'   => 'word',
+                      'rowspan' => 'number',
+                      'colspan' => 'number',
+                      %cellhv_attr,
+                      'nowrap'           => 'novalue',
+                      'bgcolor'          => 'color',
+                      'width'            => 'size',
+                      'height'           => 'size',
+                      'bordercolor'      => 'color',
+                      'bordercolorlight' => 'color',
+                      'bordercolordark'  => 'color',
     );
 
-    %_Attrib = (
-      'br'         => { 'clear' => 'word' },
-      'em'         => \%attr,
-      'strong'     => \%attr,
-      'dfn'        => \%attr,
-      'code'       => \%attr,
-      'samp'       => \%attr,
-      'kbd'        => \%attr,
-      'var'        => \%attr,
-      'cite'       => \%attr,
-      'abbr'       => \%attr,
-      'acronym'    => \%attr,
-      'q'          => { %attr, 'cite' => 'href' },
-      'blockquote' => { %attr, 'cite' => 'href' },
-      'sub'        => \%attr,
-      'sup'        => \%attr,
-      'tt'         => \%attr,
-      'i'          => \%attr,
-      'b'          => \%attr,
-      'big'        => \%attr,
-      'small'      => \%attr,
-      'u'          => \%attr,
-      's'          => \%attr,
-      'strike'     => \%attr,
-      'font'       => \%font_attr,
-      'table'      => { %attr,
-                        'frame'            => 'word',
-                        'rules'            => 'word',
-                        %texta_attr,
-                        'bgcolor'          => 'color',
-                        'background'       => 'src',
-                        'width'            => 'size',
-			'height'           => 'size',
-                        'cellspacing'      => 'size',
-                        'cellpadding'      => 'size',
-                        'border'           => 'size',
-                        'bordercolor'      => 'color',
-                        'bordercolorlight' => 'color',
-                        'bordercolordark'  => 'color',
-                        'summary'          => 'text',
-                      },
-      'caption'    => { %attr,
-                        'align' => 'word',
-                      },
-      'colgroup'   => \%col_attr,
-      'col'        => \%col_attr,
-      'thead'      => \%cellhv_attr,
-      'tfoot'      => \%cellhv_attr,
-      'tbody'      => \%cellhv_attr,
-      'tr'         => { %attr,
-                        bgcolor => 'color',
-                        %cellhv_attr,
-                      },
-      'th'         => \%thtd_attr,
-      'td'         => \%thtd_attr,
-      'ins'        => \%insdel_attr,
-      'del'        => \%insdel_attr,
-      'a'          => { %attr,
-                        href => 'href',
-                      },
-      'h1'         => \%texta_attr,
-      'h2'         => \%texta_attr,
-      'h3'         => \%texta_attr,
-      'h4'         => \%texta_attr,
-      'h5'         => \%texta_attr,
-      'h6'         => \%texta_attr,
-      'p'          => \%texta_attr,
-      'div'        => \%texta_attr,
-      'span'       => \%texta_attr,
-      'ul'         => { %attr,
-                        'type'    => 'word',
-                        'compact' => 'novalue',
-                      },
-      'ol'         => { %attr,
-                        'type'    => 'text',
-                        'compact' => 'novalue',
-                        'start'   => 'number',
-                      },
-      'li'         => { %attr,
-                        'type'  => 'text',
-                        'value' => 'number',
-                      },
-      'dl'         => { %attr, 'compact' => 'novalue' },
-      'dt'         => \%attr,
-      'dd'         => \%attr,
-      'address'    => \%attr,
-      'hr'         => { %texta_attr,
-                        'width'   => 'size',
-                        'size '   => 'size',
-                        'noshade' => 'novalue',
-                      },
-      'pre'        => { %attr, 'width' => 'size' },
-      'center'     => \%attr,
-      'nobr'       => {},
-      'img'        => { 'src'    => 'src',
-                        'alt'    => 'text',
-                        'width'  => 'size',
-                        'height' => 'size',
-                        'border' => 'size',
-                        'hspace' => 'size',
-                        'vspace' => 'size',
-                        'align'  => 'word',
-                      },
-      'body'       => { 'bgcolor'    => 'color',
-                        'background' => 'src',
-                        'link'       => 'color',
-                        'vlink'      => 'color',
-                        'alink'      => 'color',
-                        'text'       => 'color',
-                      },
-      'head'       => {},
-      'title'      => {},
-      'html'       => {},
+    %_Attrib = ( 'br'      => { 'clear' => 'word' },
+                 'em'      => \%attr,
+                 'strong'  => \%attr,
+                 'dfn'     => \%attr,
+                 'code'    => \%attr,
+                 'samp'    => \%attr,
+                 'kbd'     => \%attr,
+                 'var'     => \%attr,
+                 'cite'    => \%attr,
+                 'abbr'    => \%attr,
+                 'acronym' => \%attr,
+                 'q'          => { %attr, 'cite' => 'href' },
+                 'blockquote' => { %attr, 'cite' => 'href' },
+                 'sub'        => \%attr,
+                 'sup'        => \%attr,
+                 'tt'         => \%attr,
+                 'i'          => \%attr,
+                 'b'          => \%attr,
+                 'big'        => \%attr,
+                 'small'      => \%attr,
+                 'u'          => \%attr,
+                 's'          => \%attr,
+                 'strike'     => \%attr,
+                 'font'       => \%font_attr,
+                 'table'      => {
+                              %attr,
+                              'frame' => 'word',
+                              'rules' => 'word',
+                              %texta_attr,
+                              'bgcolor'          => 'color',
+                              'background'       => 'src',
+                              'width'            => 'size',
+                              'height'           => 'size',
+                              'cellspacing'      => 'size',
+                              'cellpadding'      => 'size',
+                              'border'           => 'size',
+                              'bordercolor'      => 'color',
+                              'bordercolorlight' => 'color',
+                              'bordercolordark'  => 'color',
+                              'summary'          => 'text',
+                 },
+                 'caption'  => { %attr, 'align' => 'word', },
+                 'colgroup' => \%col_attr,
+                 'col'      => \%col_attr,
+                 'thead'    => \%cellhv_attr,
+                 'tfoot'    => \%cellhv_attr,
+                 'tbody'    => \%cellhv_attr,
+                 'tr'       => {
+                           %attr,
+                           bgcolor => 'color',
+                           %cellhv_attr,
+                 },
+                 'th'   => \%thtd_attr,
+                 'td'   => \%thtd_attr,
+                 'ins'  => \%insdel_attr,
+                 'del'  => \%insdel_attr,
+                 'a'    => { %attr, href => 'href', },
+                 'h1'   => \%texta_attr,
+                 'h2'   => \%texta_attr,
+                 'h3'   => \%texta_attr,
+                 'h4'   => \%texta_attr,
+                 'h5'   => \%texta_attr,
+                 'h6'   => \%texta_attr,
+                 'p'    => \%texta_attr,
+                 'div'  => \%texta_attr,
+                 'span' => \%texta_attr,
+                 'ul'   => {
+                           %attr,
+                           'type'    => 'word',
+                           'compact' => 'novalue',
+                 },
+                 'ol' => { %attr,
+                           'type'    => 'text',
+                           'compact' => 'novalue',
+                           'start'   => 'number',
+                 },
+                 'li' => { %attr,
+                           'type'  => 'text',
+                           'value' => 'number',
+                 },
+                 'dl'      => { %attr, 'compact' => 'novalue' },
+                 'dt'      => \%attr,
+                 'dd'      => \%attr,
+                 'address' => \%attr,
+                 'hr'      => {
+                           %texta_attr,
+                           'width'   => 'size',
+                           'size'    => 'size',
+                           'noshade' => 'novalue',
+                 },
+                 'pre'    => { %attr, 'width' => 'size' },
+                 'center' => \%attr,
+                 'nobr'   => {},
+                 'img'    => {
+                            'src'    => 'src',
+                            'alt'    => 'text',
+                            'width'  => 'size',
+                            'height' => 'size',
+                            'border' => 'size',
+                            'hspace' => 'size',
+                            'vspace' => 'size',
+                            'align'  => 'word',
+                 },
+                 'body' => { 'bgcolor'    => 'color',
+                             'background' => 'src',
+                             'link'       => 'color',
+                             'vlink'      => 'color',
+                             'alink'      => 'color',
+                             'text'       => 'color',
+                 },
+                 'head'  => {},
+                 'title' => {},
+                 'html'  => {},
     );
 }
 
@@ -922,20 +1221,20 @@ the attribute, in canonical form.
 =cut
 
 use vars qw(%_AttVal);
+
 BEGIN {
-    %_AttVal = (
-      'style'     => \&_hss_attval_style,
-      'size'      => \&_hss_attval_size,
-      'number'    => \&_hss_attval_number,
-      'color'     => \&_hss_attval_color,
-      'text'      => \&_hss_attval_text,
-      'word'      => \&_hss_attval_word,
-      'wordlist'  => \&_hss_attval_wordlist,
-      'wordlistq' => \&_hss_attval_wordlistq,
-      'href'      => \&_hss_attval_href,
-      'src'       => \&_hss_attval_src,
-      'stylesrc'  => \&_hss_attval_stylesrc,
-      'novalue'   => \&_hss_attval_novalue,
+    %_AttVal = ( 'style'     => \&_hss_attval_style,
+                 'size'      => \&_hss_attval_size,
+                 'number'    => \&_hss_attval_number,
+                 'color'     => \&_hss_attval_color,
+                 'text'      => \&_hss_attval_text,
+                 'word'      => \&_hss_attval_word,
+                 'wordlist'  => \&_hss_attval_wordlist,
+                 'wordlistq' => \&_hss_attval_wordlistq,
+                 'href'      => \&_hss_attval_href,
+                 'src'       => \&_hss_attval_src,
+                 'stylesrc'  => \&_hss_attval_stylesrc,
+                 'novalue'   => \&_hss_attval_novalue,
     );
 }
 
@@ -951,15 +1250,15 @@ class names to be used as keys into the C<AttVal> whitelist.
 =cut
 
 use vars qw(%_Style);
+
 BEGIN {
-    %_Style = (
-      'color'            => 'color',
-      'background-color' => 'color',
-      'background'       => 'stylesrc',
-      'background-image' => 'stylesrc',
-      'font-size'        => 'size',
-      'font-family'      => 'wordlistq',
-      'text-align'       => 'word',
+    %_Style = ( 'color'            => 'color',
+                'background-color' => 'color',
+                'background'       => 'stylesrc',
+                'background-image' => 'stylesrc',
+                'font-size'        => 'size',
+                'font-family'      => 'wordlistq',
+                'text-align'       => 'word',
     );
 }
 
@@ -982,10 +1281,11 @@ because both C<b> and C<i> appear as keys in the C<DeInter> whitelist.
 =cut
 
 use vars qw(%_DeInter);
+
 BEGIN {
-    %_DeInter = map {$_ => 1} qw(
-      tt i b big small u s strike font em strong dfn code
-      q sub sup samp kbd var cite abbr acronym span
+    %_DeInter = map { $_ => 1 } qw(
+        tt i b big small u s strike font em strong dfn code
+        q sub sup samp kbd var cite abbr acronym span
     );
 }
 
@@ -1014,15 +1314,14 @@ ampersands that don't form part of valid entities with C<&amp;>.
 =cut
 
 sub text_to_canonical_form {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $text =~ s#&gt;#>#g;
     $text =~ s#&lt;#<#g;
     $text =~ s#&quot;#"#g;
     $text =~ s#&apos;#'#g;
 
-    $text =~
-      s! ( [^&]+ | &[a-z0-9]{2,15}; )  |
+    $text =~ s! ( [^&]+ | &[a-z0-9]{2,15}; )  |
          &[#](0*[0-9]{2,6});           |
          &[#](x0*[a-f0-9]{2,6});       |
          &
@@ -1042,11 +1341,17 @@ This method is used to reduce attribute values quoted with doublequotes
 or singlequotes to canonical form before passing it to the handler subs
 in the C<AttVal> whitelist.
 
-The default behavior is the same as that of text_to_canonical_form().
+The default behavior is the same as that of C<text_to_canonical_form()>,
+plus it converts any CR, LF or TAB characters to spaces.
 
 =cut
 
-*quoted_to_canonical_form = \&text_to_canonical_form;
+sub quoted_to_canonical_form {
+    my ( $self, $text ) = @_;
+    $text = $self->text_to_canonical_form($text);
+    $text=~tr/\n\r\t/   /s;
+    return $text;
+}
 
 =item unquoted_to_canonical_form ( VALUE )
 
@@ -1061,30 +1366,9 @@ unquoted values.
 =cut
 
 sub unquoted_to_canonical_form {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $text =~ s#&#&amp;#g;
-    return $text;
-}
-
-=item canonical_form_to_attval ( ATTVAL )
-
-This method is used to convert the text in canonical form returned by
-the C<AttVal> handler subs to a form suitable for inclusion in
-doublequotes in the output tag.
-
-The default implementation runs anything that doesn't look like a
-valid entity through the escape_html_metachars() method.
-
-=cut
-
-sub canonical_form_to_attval {
-    my ($self, $text) = @_;
-
-    $text =~ s/ (&[#\w]+;) | (.[^&]*)
-              / defined $1 ? $1 : $self->escape_html_metachars($2)
-              /gex;
-
     return $text;
 }
 
@@ -1099,7 +1383,33 @@ valid entity through the escape_html_metachars() method.
 
 =cut
 
-*canonical_form_to_text = \&canonical_form_to_attval;
+sub canonical_form_to_text {
+    my ( $self, $text ) = @_;
+    $text =~ s/ (&[#\w]+;) | (.[^&]*)
+              / defined $1 ? $1 : $self->escape_html_metachars($2)
+              /gex;
+
+    return $text;
+}
+
+=item canonical_form_to_attval ( ATTVAL )
+
+This method is used to convert the text in canonical form returned by
+the C<AttVal> handler subs to a form suitable for inclusion in
+doublequotes in the output tag.
+
+The default implementation converts CR, LF and TAB characters to a single
+space, and runs anything that doesn't look like a
+valid entity through the escape_html_metachars() method.
+
+=cut
+
+sub canonical_form_to_attval {
+    my ( $self, $text ) = @_;
+    $text=~tr/\n\r\t/   /s;
+    return $self->canonical_form_to_text($text);
+}
+
 
 =item validate_href_attribute ( TEXT )
 
@@ -1112,18 +1422,57 @@ The default implementation allows only absolute C<http> and C<https>
 URLs, permits port numbers and query strings, and imposes reasonable
 length limits.
 
+It does not URI escape the query string, and it does not guarantee
+properly formatted URIs, it just tries to give safe URIs. You can
+always use an attribute callback (see L<"Attribute Callbacks">)
+to provide stricter handling.
+
 =cut
 
 sub validate_href_attribute {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
-    return $1 if $self->{_hssCfg}{AllowRelURL} and $text =~ /^([\w\-\.\,\/]{1,100})$/;
+    return $1
+        if $self->{_hssCfg}{AllowRelURL}
+        and $text =~ /^((?:[\w\-.!~*|;\/?=+\$,%#]|&amp;){0,100})$/;
 
     $text =~ m< ^ ( https? :// [\w\-\.]{1,100} (?:\:\d{1,5})?
                     (?: / (?:[\w\-.!~*|;/?=+\$,%#]|&amp;){0,100} )?
                   )
                 $
               >x ? $1 : undef;
+}
+
+=item validate_mailto ( TEXT )
+
+If the C<AllowMailto> filter configuration option is set, then this
+method is used to validate C<href> type attribute values which begin
+with C<mailto:>.  TEXT is the attribute value in canonical form.
+Returns a possibly modified attribute value (in canonical form) or C<undef>
+to reject the attribute.
+
+This uses a lightweight regex and does not guarantee that email
+addresses are properly formatted. You can
+always use an attribute callback (see L<"Attribute Callbacks">)
+to provide stricter handling.
+
+=cut
+
+sub validate_mailto {
+    my ( $self, $text ) = @_;
+
+    return $1
+        if $text =~ m/^(
+            mailto:[\w\-!#$%&'*+-\/=?^_`{|}~.]{1,64}    # localpart
+            \@                                          # @
+            [\w\-\.]{1,100}                             # domain
+            (?:                                         # opt query string
+                \?
+                (?:[\w\-.!~*|;\/?=+\$,%#]|&amp;){0,100}
+            )?
+            )$/x;
+
+    return undef;
 }
 
 =item validate_src_attribute ( TEXT )
@@ -1159,7 +1508,7 @@ The default implementation does no filtering.
 =cut
 
 sub filter_text {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     return $text;
 }
@@ -1181,18 +1530,18 @@ character set will be able to escape much more aggressively.
 =cut
 
 use vars qw(%_Escape_HTML_map);
+
 BEGIN {
-    %_Escape_HTML_map = (
-        '&' => '&amp;',
-        '<' => '&lt;',
-        '>' => '&gt;',
-        '"' => '&quot;',
-        "'" => '&#39;',
+    %_Escape_HTML_map = ( '&' => '&amp;',
+                          '<' => '&lt;',
+                          '>' => '&gt;',
+                          '"' => '&quot;',
+                          "'" => '&#39;',
     );
 }
 
 sub escape_html_metachars {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $text =~ s#([&<>"'])# $_Escape_HTML_map{$1} #ge;
     return $text;
@@ -1214,13 +1563,29 @@ character, and hence a more secure strip_nonprintable() implementation.
 =cut
 
 sub strip_nonprintable {
-    my ($self, $text) = @_;
+    my ( $self, $text ) = @_;
 
     $text =~ tr#\0# #s;
     return $text;
 }
 
 =cut
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 =back
 
@@ -1238,7 +1603,7 @@ Attribute value hander for the C<style> attribute.
 =cut
 
 sub _hss_attval_style {
-    my ($filter, $tagname, $attrname, $attrval) = @_;
+    my ( $filter, $tagname, $attrname, $attrval ) = @_;
     my @clean = ();
 
     # Split on semicolon, making a reasonable attempt to ignore
@@ -1248,15 +1613,15 @@ sub _hss_attval_style {
         $attrval =~ s/^;//;
 
         if ( $elt =~ m|^\s*([\w\-]+)\s*:\s*(.+?)\s*$|s ) {
-            my ($key, $val) = (lc $1, $2);
+            my ( $key, $val ) = ( lc $1, $2 );
 
             my $value_class = $filter->{_hssStyle}{$key};
             next unless defined $value_class;
-            my $sub =  $filter->{_hssAttVal}{$value_class};
+            my $sub = $filter->{_hssAttVal}{$value_class};
             next unless defined $sub;
 
-            my $cleanval = &{$sub}($filter, 'style-psuedo-tag', $key, $val);
-            if (defined $cleanval) {
+            my $cleanval = &{$sub}( $filter, 'style-psuedo-tag', $key, $val );
+            if ( defined $cleanval ) {
                 push @clean, "$key:$val";
             }
         }
@@ -1273,8 +1638,10 @@ size or length.
 =cut
 
 sub _hss_attval_size {
-    $_[3] =~ /^\s*([+-]?\d{1,20}(?:\.\d{1,20)?)\s*((?:\%|\*|ex|px|pc|cm|mm|in|pt|em)?)\s*$/i
-    ? lc "$1$2" : undef;
+    $_[3]
+        =~ /^\s*([+-]?\d{1,20}(?:\.\d{1,20)?)\s*((?:\%|\*|ex|px|pc|cm|mm|in|pt|em)?)\s*$/i
+        ? lc "$1$2"
+        : undef;
 }
 
 =item _hss_attval_number ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
@@ -1339,12 +1706,12 @@ around words and spaces allowed within the doublequotes.
 =cut
 
 sub _hss_attval_wordlistq {
-    my ($filter, $tagname, $attrname, $attrval) = @_;
+    my ( $filter, $tagname, $attrname, $attrval ) = @_;
 
     my @words = grep /^\s*(?:(?:"[\w\- ]{1,50}")|(?:[\w\-]{1,30}))\s*$/,
-                split /,/, $attrval;
+        split /,/, $attrval;
 
-    scalar(@words) ? join(', ', @words) : undef;
+    scalar(@words) ? join( ', ', @words ) : undef;
 }
 
 =item _hss_attval_href ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
@@ -1355,15 +1722,18 @@ to check the attribute value.
 
 =cut
 
-sub  _hss_attval_href {
-   my ($filter, $tagname, $attname, $attval) = @_;
+sub _hss_attval_href {
+    my ( $filter, $tagname, $attname, $attval ) = @_;
 
-   if ( $filter->{_hssCfg}{AllowHref} ) {
-       return $filter->validate_href_attribute($attval);
-   }
-   else {
-       return undef;
-   }
+    if ( $filter->{_hssCfg}{AllowHref} ) {
+        return $filter->validate_href_attribute($attval);
+    }
+    elsif ( $filter->{_hssCfg}{AllowMailto}
+            && substr( $attval, 0, 7 ) eq 'mailto:' ) {
+        return $filter->validate_mailto($attval);
+    }
+    return undef;
+
 }
 
 =item _hss_attval_src ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
@@ -1374,15 +1744,15 @@ to check the attribute value.
 
 =cut
 
-sub  _hss_attval_src {
-   my ($filter, $tagname, $attname, $attval) = @_;
+sub _hss_attval_src {
+    my ( $filter, $tagname, $attname, $attval ) = @_;
 
-   if ( $filter->{_hssCfg}{AllowSrc} ) {
-       return $filter->validate_src_attribute($attval);
-   }
-   else {
-       return undef;
-   }
+    if ( $filter->{_hssCfg}{AllowSrc} ) {
+        return $filter->validate_src_attribute($attval);
+    }
+    else {
+        return undef;
+    }
 }
 
 =item _hss_attval_stylesrc ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
@@ -1392,14 +1762,14 @@ Attribute value handler for C<src> type style pseudo attributes.
 =cut
 
 sub _hss_attval_stylesrc {
-   my ($filter, $tagname, $attname, $attval) = @_;
+    my ( $filter, $tagname, $attname, $attval ) = @_;
 
-   if ( $attval =~ m#^\s*url\((.+)\)\s*$# ) {
-       return _hss_attval_src($filter, $tagname, $attname, $1);
-   }
-   else {
-       return undef;
-   }
+    if ( $attval =~ m#^\s*url\((.+)\)\s*$# ) {
+        return _hss_attval_src( $filter, $tagname, $attname, $1 );
+    }
+    else {
+        return undef;
+    }
 }
 
 =item _hss_attval_novalue ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
@@ -1410,7 +1780,7 @@ is ignored.  Just returns the attribute name as the value.
 =cut
 
 sub _hss_attval_novalue {
-    my ($filter, $tagname, $attname, $attval) = @_;
+    my ( $filter, $tagname, $attname, $attval ) = @_;
 
     return $attname;
 }
@@ -1442,6 +1812,221 @@ these methods.
 
 =over
 
+=item _hss_prepare_ban_list (CFG)
+
+Returns a hash ref representing all the banned tags, based on the values
+of BanList and BanAllBut
+
+=cut
+
+#===================================
+sub _hss_prepare_ban_list {
+#===================================
+    my ( $self, $cfg ) = @_;
+
+    my $ban_list = $cfg->{BanList} || {};
+    my $prepared_ban_list =
+        ref $ban_list eq 'ARRAY'
+        ? { map { $_ => 1 } @$ban_list }
+        : $ban_list;
+
+    # Rules => {'*' => 0} or {'*' => {tag => '0'}} means BanAllBut other tags
+    # mentioned in the rules
+    if ( my $rules = $cfg->{Rules} ) {
+        if ( exists $rules->{'*'}
+             && ( (    ref $rules->{'*'} eq 'HASH'
+                    && exists $rules->{'*'}{'tag'}
+                    && !$rules->{'*'}{'tag'}
+                  )
+                  || ( !$rules->{'*'} )
+             )
+            )
+        {
+            $cfg->{BanAllBut} ||= [];
+
+        }
+    }
+
+    if ( $cfg->{BanAllBut} ) {
+        my %ban = map { $_ => 1 } keys %{ $self->{_hssAttrib} };
+        foreach my $dontban ( @{ $cfg->{BanAllBut} } ) {
+            delete $ban{$dontban} unless $prepared_ban_list->{$dontban};
+        }
+        $prepared_ban_list = \%ban;
+    }
+    return $prepared_ban_list;
+}
+
+=item _hss_prepare_rules (CFG)
+
+Returns a hash ref representing the tag and attribute rules (See L</"Rules">).
+
+Returns undef if no filters are specified, in which case the
+attribute filter code has very little performance impact. If any rules are
+specified, then every tag and attribute is checked.
+
+=cut
+
+#===================================
+sub _hss_prepare_rules {
+#===================================
+    my ( $self, $cfg ) = @_;
+
+    my $rules = $cfg->{Rules};
+
+    return undef
+        unless $rules
+        && ref $rules eq 'HASH'
+        && keys %$rules;
+
+    die "'Rules' must be a HASH ref"
+        unless ref $rules eq 'HASH';
+
+    my $banned = $self->{_hssBanList};
+
+    my %prepared_rules;
+    foreach my $tag ( keys %$rules ) {
+        my $rule = $rules->{$tag};
+        $tag = lc($tag);
+
+        # TAG => 0
+        if ( !$rule ) {
+            $banned->{$tag} ||= 1;
+            next;
+        }
+
+        delete $banned->{$tag};
+        if ( my $rule_ref = ref $rule ) {
+
+            # TAG => CODEREF
+            $rule = { tag => $rule }
+                if $rule_ref eq 'CODE';
+
+            die "Unknown value for tag '$tag'. Must be a HASH or a CODE ref"
+                unless ref $rule eq 'HASH';
+        }
+        else {
+
+            # TAG => 1
+            next;
+        }
+
+        # TAG => HASHREF
+        my %prepared_rule;
+
+        # Required attributes
+        if ( my $required = delete $rule->{required} ) {
+            if ( ref $required eq 'ARRAY' && @$required ) {
+                $prepared_rule{required} = $required;
+            }
+        }
+
+    RULE:
+        while ( my ( $key, $value ) = each %$rule ) {
+
+            $key = lc($key);
+
+            # Pass through code refs
+            my $ref_type = ref $value;
+            if ( $ref_type eq 'CODE' ) {
+                $prepared_rule{$key} = $value;
+                next RULE;
+            }
+
+            if ( !$ref_type ) {
+
+                # Pass through 1 / 0
+                if ( $value eq '0' or $value eq '1' ) {
+                    $prepared_rule{$key} = $value;
+                    next RULE;
+                }
+
+                # Any remaining values must be regexes
+                $value = eval {qr/$value/}
+                    or die "Invalid regex rule for '$tag' => '$key' : $@";
+                $ref_type = 'Regexp';
+            }
+
+            die "Invalid rule value for '$tag' => '$key' : $ref_type"
+                unless $ref_type eq 'Regexp';
+
+            # Convert regex into anonymous sub
+            $prepared_rule{$key} = sub {
+                my ( $rule, $tagname, $attname, $attval ) = @_;
+                return $attval =~ m/$value/
+                    ? $attval
+                    : undef;
+            };
+
+        }
+        $prepared_rules{$tag} = \%prepared_rule
+            if keys %prepared_rule;
+    }
+    return undef
+        unless keys %prepared_rules;
+
+    # Add default setting of {'*' => {'*' => 1}}
+    # unless it already has a value
+    unless ( exists $prepared_rules{'*'}{'*'} ) {
+        $prepared_rules{'*'}{'*'} = 1;
+    }
+
+    # Remove required attribs from default
+    delete $prepared_rules{'*'}{required};
+
+    # Remove 'tag' from default unless is a sub
+    delete $prepared_rules{'*'}{tag} unless ref $prepared_rules{'*'}{tag};
+    return \%prepared_rules;
+}
+
+=item _hss_get_attr_filter ( DEFAULT_FILTERS TAG_FILTERS ATTR_NAME)
+
+Returns the attribute filter rule to apply to this particular attribute.
+
+Checks for:
+
+  - a named attribute rule in a named tag
+  - a default * attribute rule in a named tag
+  - a named attribute rule in the default * rules
+  - a default * attribute rule in the default * rules
+
+=cut
+
+sub _hss_get_attr_filter {
+    my ( $self, $default_filters, $tag_filters, $key ) = @_;
+
+    return $tag_filters->{$key}
+        if exists $tag_filters->{$key};
+
+    return $tag_filters->{'*'}
+        if exists $tag_filters->{'*'};
+
+    return $default_filters->{$key}
+        if exists $default_filters->{$key};
+
+    return $default_filters->{'*'};
+
+}
+
+=item _hss_join_attribs (FILTERED_ATTRIBS)
+
+Accepts a hash ref containing the attribute names as the keys, and the attribute
+values as the values.  Escapes them and returns a string ready for output to
+HTML
+
+=cut
+
+sub _hss_join_attribs {
+    my ( $self, $attrs ) = @_;
+    my $filtered_attrs = '';
+    foreach my $key ( sort keys %$attrs ) {
+        my $escaped = $self->canonical_form_to_attval( $attrs->{$key} );
+        $filtered_attrs .= qq| $key="$escaped"|;
+
+    }
+    return $filtered_attrs;
+}
+
 =item _hss_decode_numeric ( NUMERIC )
 
 Returns the string that should replace the numeric entity NUMERIC
@@ -1450,7 +2035,7 @@ in the text_to_canonical_form() method.
 =cut
 
 sub _hss_decode_numeric {
-    my ($self, $numeric) = @_;
+    my ( $self, $numeric ) = @_;
 
     my $hex = ( $numeric =~ s/^x//i ? 1 : 0 );
 
@@ -1464,7 +2049,7 @@ sub _hss_decode_numeric {
         return chr $number;
     }
     else {
-        return '&#' . ($hex ? 'x' : '') . uc($numeric) . ';';
+        return '&#' . ( $hex ? 'x' : '' ) . uc($numeric) . ';';
     }
 }
 
@@ -1476,7 +2061,7 @@ harmless tags that the filter is configured to block, false otherwise.
 =cut
 
 sub _hss_tag_is_banned {
-    my ($self, $tag) = @_;
+    my ( $self, $tag ) = @_;
 
     exists $self->{_hssBanList}{$tag} ? 1 : 0;
 }
@@ -1495,11 +2080,11 @@ just be rejected.
 =cut
 
 sub _hss_get_to_valid_context {
-    my ($self, $tag) = @_;
+    my ( $self, $tag ) = @_;
 
     # Special case: nested <a> is never valid.
-    if ($tag eq 'a') {
-        foreach my $ancestor (@{ $self->{_hssStack} }) {
+    if ( $tag eq 'a' ) {
+        foreach my $ancestor ( @{ $self->{_hssStack} } ) {
             return 0 if $ancestor->{NAME} eq 'a';
         }
     }
@@ -1511,15 +2096,16 @@ sub _hss_get_to_valid_context {
         return 1 if $self->_hss_valid_in_current_context($tag);
     }
 
-    if ( $self->_hss_context eq 'Html' and
-         $self->_hss_valid_in_context($tag, 'Flow')
-       ) {
+    if (     $self->_hss_context eq 'Html'
+         and $self->_hss_valid_in_context( $tag, 'Flow' ) )
+    {
         $self->input_start('<body>');
         return 1;
     }
 
-    return 0 unless grep { $self->_hss_valid_in_context($tag, $_->{CTX}) }
-                         @{ $self->{_hssStack} };
+    return 0
+        unless grep { $self->_hss_valid_in_context( $tag, $_->{CTX} ) }
+        @{ $self->{_hssStack} };
 
     until ( $self->_hss_valid_in_current_context($tag) ) {
         $self->_hss_close_innermost_tag;
@@ -1536,9 +2122,7 @@ Closes the innermost open tag.
 
 sub _hss_close_innermost_tag {
     my ($self) = @_;
-
-    $self->output_end('</' . $self->{_hssStack}[0]{NAME} . '>');
-    shift @{ $self->{_hssStack} };
+    $self->output_stack_entry( shift @{ $self->{_hssStack} } );
     die 'tag stack underflow' unless scalar @{ $self->{_hssStack} };
 }
 
@@ -1562,7 +2146,7 @@ CONTEXT, false otherwise.
 =cut
 
 sub _hss_valid_in_context {
-    my ($self, $tag, $context) = @_;
+    my ( $self, $tag, $context ) = @_;
 
     $self->{_hssContext}{$context}{$tag} ? 1 : 0;
 }
@@ -1575,18 +2159,18 @@ current context, false otherwise.
 =cut
 
 sub _hss_valid_in_current_context {
-    my ($self, $tag) = @_;
+    my ( $self, $tag ) = @_;
 
-    $self->_hss_valid_in_context($tag, $self->_hss_context);
+    $self->_hss_valid_in_context( $tag, $self->_hss_context );
 }
 
 =back
 
-=head1 BUGS
+=head1 BUGS AND LIMITATIONS
 
 =over
 
-=item
+=item Performance
 
 This module does a lot of work to ensure that tags are correctly
 nested and are not left open, causing unnecessary overhead for
@@ -1594,6 +2178,17 @@ applications where that doesn't matter.
 
 Such applications may benefit from using the more lightweight
 L<HTML::Scrubber::StripScripts> module instead.
+
+=item Strictness
+
+URIs and email addresses are cleaned up to be safe, but not
+necessarily accurate.  That would have required adding dependencies.
+Attribute callbacks can be used to add this functionality if required,
+or the validation methods can be overriden.
+
+By default, filtered HTML may not be valid strict XHTML, for instance empty
+required attributes may be outputted.  However, with L</"Rules">,
+it should be possible to force the HTML to validate.
 
 =back
 
@@ -1604,11 +2199,16 @@ L<HTML::StripScripts::Regex>
 
 =head1 AUTHOR
 
-Nick Cleaton E<lt>nick@cleaton.netE<gt>
+Original author Nick Cleaton E<lt>nick@cleaton.netE<gt>
+
+New code added and module maintained by Clinton Gormley
+E<lt>clint@traveljury.comE<gt>
 
 =head1 COPYRIGHT
 
 Copyright (C) 2003 Nick Cleaton.  All Rights Reserved.
+
+Copyright (C) 2007 Clinton Gormley.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

@@ -1,6 +1,6 @@
 
 use strict;
-use Test::More tests => 16;
+use Test::More tests => 22;
 
 BEGIN { $^W = 1 }
 
@@ -99,6 +99,21 @@ is( $f->filtered_document,
     '<!--filtered-->foo<!--filtered--><hr /><!--filtered--><!--filtered-->bar',
     'BanList beats BanAllBut' );
 
+$f = HTML::StripScripts->new({ BanList   => [qw(i p)],
+                            BanAllBut => [qw(i hr)]});
+$f->input_start_document;
+$f->input_start('<p>');
+$f->input_text('foo');
+$f->input_start('</p>');
+$f->input_start('<hr>');
+$f->input_start('<b>');
+$f->input_start('<i>');
+$f->input_text('bar');
+$f->input_end_document;
+is( $f->filtered_document,
+    '<!--filtered-->foo<!--filtered--><hr /><!--filtered--><!--filtered-->bar',
+    'BanList as Array beats BanAllBut' );
+
 $f = HTML::StripScripts->new;
 $f->input_start_document;
 $f->input_start('<img src="http://www.example.com/img.png" />');
@@ -137,4 +152,42 @@ $f->input_start('<a href="javascript:alert(31337)">');
 $f->input_text('foo');
 $f->input_end_document;
 is( $f->filtered_document, '<a>foo</a>', 'AllowHref checks URL' );
+
+$f = HTML::StripScripts->new({ EscapeFiltered => 1, BanList=>['font'] });
+$f->input_start_document;
+$f->input_start('<font face="arial">');
+$f->input_text('Text');
+$f->input_end('</font>');
+$f->input_end_document;
+is( $f->filtered_document, '&lt;font face=&quot;arial&quot;&gt;Text&lt;/font&gt;', 'EscapeFiltered on' );
+
+$f = HTML::StripScripts->new({ EscapeFiltered => 0, BanList=>['font'] });
+$f->input_start_document;
+$f->input_start('<font face="arial">');
+$f->input_text('Text');
+$f->input_end('</font>');
+$f->input_end_document;
+is( $f->filtered_document, '<!--filtered-->Text<!--filtered-->', 'EscapeFiltered on' );
+
+
+$f = HTML::StripScripts->new;
+$f->input_start_document;
+$f->input_start('<a href="mailto:test@test.com">');
+$f->input_text('foo');
+$f->input_end_document;
+is( $f->filtered_document, '<a>foo</a>', 'AllowMailto defaults to no' );
+
+$f = HTML::StripScripts->new({ AllowHref => 1 });
+$f->input_start_document;
+$f->input_start('<a href="mailto:test@test.com">');
+$f->input_text('foo');
+$f->input_end_document;
+is( $f->filtered_document, '<a>foo</a>', "AllowHref doesn't enable mailto's" );
+
+$f = HTML::StripScripts->new({ AllowMailto => 1 });
+$f->input_start_document;
+$f->input_start('<a href="mailto:test@test.com">');
+$f->input_text('foo');
+$f->input_end_document;
+is( $f->filtered_document, '<a href="mailto:test@test.com">foo</a>', 'AllowMailto yes' );
 

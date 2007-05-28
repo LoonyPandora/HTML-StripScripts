@@ -13,11 +13,11 @@ mytest( '<->',   '<!--filtered-->', 'reject malformed' );
 mytest( '<foo>', '<!--filtered-->', 'reject unknown' );
 mytest( '<i />', '<i></i>',         'ignore trailing junk' );
 mytest( '<img alt="foo" alt="bar" />',
-        '<img alt="foo" alt="bar" />',
-	'allow multiple values' );
-mytest( '<img alt="foo"alt="bar" />',
-        '<img alt="foo" alt="bar" />',
-	'allow squashed values' );
+        '<img alt="bar" />',
+    'overwrite repeated values' );
+mytest( '<img align="right"alt="bar" />',
+        '<img align="right" alt="bar" />',
+    'allow squashed values' );
 
 mytest( q{<img alt='foo'>},      '<img alt="foo" />',           'accept singlequotes' );
 mytest( '<img alt=foo>',         '<img alt="foo" />',           'accept unquoted' );
