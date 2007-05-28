@@ -1,4 +1,4 @@
-0.90  28 May 2007  BanList can now be an array ref or a hash ref
+0.99  28 May 2007  BanList can now be an array ref or a hash ref
 
                    Repeated attributes are no longer merged, instead
                    the second value replaces the first
