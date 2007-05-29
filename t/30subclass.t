@@ -33,7 +33,7 @@ Overriding output_start_document() to prepend an HTML comment.
     sub output_start_document {
         my ($self) = @_;
 
-	$self->output_comment('<!--foo-->');
+    $self->output_comment('<!--foo-->');
     }
 }
 my $f = SubClass_output_start_document->new;
@@ -55,7 +55,7 @@ Overriding output_end_document() to apend an HTML comment.
     sub output_end_document {
         my ($self) = @_;
 
-	$self->output_comment('<!--foo-->');
+    $self->output_comment('<!--foo-->');
     }
 }
 $f = SubClass_output_end_document->new;
@@ -77,7 +77,7 @@ Overriding output_start() to convert start tags to upper case
     sub output_start {
         my ($self, $text) = @_;
 
-	$self->output(uc $text);
+    $self->output(uc $text);
     }
 }
 $f = SubClass_output_start->new;
@@ -100,7 +100,7 @@ Overriding output_text() to convert text to upper case
     sub output_text {
         my ($self, $text) = @_;
 
-	$self->output(uc $text);
+    $self->output(uc $text);
     }
 }
 $f = SubClass_output_text->new;
@@ -123,7 +123,7 @@ Overriding output_end() to convert end tags to upper case
     sub output_end {
         my ($self, $text) = @_;
 
-	$self->output(uc $text);
+    $self->output(uc $text);
     }
 }
 $f = SubClass_output_end->new;
@@ -146,7 +146,7 @@ Overriding output() to convert all output to upper case
     sub output {
         my ($self, $text) = @_;
 
-	$self->SUPER::output(uc $text);
+    $self->SUPER::output(uc $text);
     }
 }
 $f = SubClass_output->new;
@@ -170,7 +170,7 @@ replaced with HTML comments.
     sub reject_start {
         my ($self, $text) = @_;
 
-	$self->output_text( $self->escape_html_metachars($text) );
+    $self->output_text( $self->escape_html_metachars($text) );
     }
 }
 $f = SubClass_reject_start->new;
@@ -194,7 +194,7 @@ replaced with HTML comments.
     sub reject_end {
         my ($self, $text) = @_;
 
-	$self->output_text( $self->escape_html_metachars($text) );
+    $self->output_text( $self->escape_html_metachars($text) );
     }
 }
 $f = SubClass_reject_end->new;
@@ -218,7 +218,7 @@ a different HTML comment than the default.
     sub reject_text {
         my ($self, $text) = @_;
 
-	$self->output_comment('<!--foo-->');
+    $self->output_comment('<!--foo-->');
     }
 }
 $f = SubClass_reject_text->new({ Context => 'Document' });
@@ -246,7 +246,7 @@ with custom text.
     sub reject_declaration {
         my ($self, $text) = @_;
 
-	$self->output_declaration('<! FOO >');
+    $self->output_declaration('<! FOO >');
     }
 }
 $f = SubClass_reject_declaration->new;
@@ -271,7 +271,7 @@ with custom text.
     sub reject_comment {
         my ($self, $text) = @_;
 
-	$self->output_comment('<!--foo-->');
+    $self->output_comment('<!--foo-->');
     }
 }
 $f = SubClass_reject_comment->new;
@@ -296,7 +296,7 @@ replaced with custom text.
     sub reject_process {
         my ($self, $text) = @_;
 
-	$self->output_process('<? FOO ?>');
+    $self->output_process('<? FOO ?>');
     }
 }
 $f = SubClass_reject_process->new;
@@ -336,7 +336,7 @@ tags only at C<Flow> level.
     sub init_context_whitelist {
         my ($self) = @_;
 
-	return \%_Context;
+    return \%_Context;
     }
 }
 $f = SubClass_init_context_whitelist->new;
@@ -414,8 +414,8 @@ with C<blue>.
     my $super = $_AttVal{'color'};
     $_AttVal{'color'} = sub {
         my ($filter, $tag, $attname, $attval) = @_;
-	$attval =~ s/pink/blue/i;
-	&{ $super }($filter, $tag, $attname, $attval);
+    $attval =~ s/pink/blue/i;
+    &{ $super }($filter, $tag, $attname, $attval);
     };
 
     sub init_attval_whitelist {
@@ -482,7 +482,7 @@ is( $f->filtered_document, '<span style="background-color:#ffffff; color:pink">f
 
 =item init_deinter_whitelist
 
-Overriding init_deinter_whitelist() so that the C<font> tag will not be 
+Overriding init_deinter_whitelist() so that the C<font> tag will not be
 autodeinterleaved.
 
 =cut
@@ -539,7 +539,7 @@ links will be accepted.
         my ($self, $text) = @_;
 
         $text =~ m#^([\w\./\-]{2,100})$# ? $1 :
-	   $self->SUPER::validate_href_attribute($text);
+    $self->SUPER::validate_href_attribute($text);
     }
 }
 $f = SubClass_validate_href_attribute->new({ AllowHref => 1 });
@@ -562,7 +562,7 @@ Overriding filter_text() to convert text to upper case
     sub filter_text {
         my ($self, $text) = @_;
 
-	return uc $text;
+    return uc $text;
     }
 }
 $f = SubClass_filter_text->new;
@@ -585,8 +585,8 @@ Overriding escape_html_metachars() to convert escape more aggressively
     sub escape_html_metachars {
         my ($self, $text) = @_;
 
-	$text =~ s|([<>"'&\200-\377])| sprintf '&#%d;', ord $1 |ge;
-	return $text;
+    $text =~ s|([<>"'&\200-\377])| sprintf '&#%d;', ord $1 |ge;
+    return $text;
     }
 }
 $f = SubClass_escape_html_metachars->new;
@@ -599,6 +599,8 @@ is( $f->filtered_document, '<img alt="&#60;foo &#255;&#62;" />', 'subclass escap
 
 Overriding strip_nonprintable() to strip more aggressively
 
+=back
+
 =cut
 
 {
@@ -608,8 +610,8 @@ Overriding strip_nonprintable() to strip more aggressively
     sub strip_nonprintable {
         my ($self, $text) = @_;
 
-	$text =~ tr#\000-\007# #s;
-	return $text;
+    $text =~ tr#\000-\007# #s;
+    return $text;
     }
 }
 $f = SubClass_strip_nonprintable->new;

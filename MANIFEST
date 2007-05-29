@@ -13,4 +13,6 @@ t/50rel_url.t
 t/60rules_tag.t
 t/61rules_attribs.t
 t/62rules_callbacks.t
+t/80pod.t
+t/81pod_coverage.t
 META.yml                                 Module meta-data (added by MakeMaker)

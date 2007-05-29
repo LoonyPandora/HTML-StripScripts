@@ -1,11 +1,14 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         HTML-StripScripts
-version:      0.99
-version_from: StripScripts.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                HTML-StripScripts
+version:             0.991
+abstract:            Strip scripting constructs out of HTML
+license:             perl
+generated_by:        ExtUtils::MakeMaker version 6.32
+distribution_type:   module
+requires:     
     Test::More:                    0
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Nick Cleaton <nick@cleaton.net>, Clinton Gormley <clint@traveljury.com>

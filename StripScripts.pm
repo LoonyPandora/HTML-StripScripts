@@ -3,11 +3,11 @@ use strict;
 use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '0.99';
+$VERSION = '0.991';
 
 =head1 NAME
 
-HTML::StripScripts - strip scripting constructs out of HTML
+HTML::StripScripts - Strip scripting constructs out of HTML
 
 =head1 SYNOPSIS
 
@@ -376,6 +376,21 @@ sub new {
     return $self;
 }
 
+=back
+
+=head1 METHODS
+
+This class provides the following methods:
+
+=over
+
+=item hss_init ()
+
+This method is called by new() and does the actual initialisation work
+for the new HTML::StripScripts object.
+
+=cut
+
 sub hss_init {
     my ( $self, $cfg ) = @_;
     $cfg ||= {};
@@ -390,14 +405,6 @@ sub hss_init {
     $self->{_hssBanList} = $self->_hss_prepare_ban_list($cfg);
     $self->{_hssRules}   = $self->_hss_prepare_rules($cfg);
 }
-
-=back
-
-=head1 METHODS
-
-This class provides the following methods:
-
-=over
 
 =item input_start_document ()
 
@@ -1471,8 +1478,7 @@ sub validate_mailto {
                 (?:[\w\-.!~*|;\/?=+\$,%#]|&amp;){0,100}
             )?
             )$/x;
-
-    return undef;
+    return;
 }
 
 =item validate_src_attribute ( TEXT )
@@ -1568,23 +1574,6 @@ sub strip_nonprintable {
     $text =~ tr#\0# #s;
     return $text;
 }
-
-=cut
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 =back
@@ -1708,7 +1697,7 @@ around words and spaces allowed within the doublequotes.
 sub _hss_attval_wordlistq {
     my ( $filter, $tagname, $attrname, $attrval ) = @_;
 
-    my @words = grep /^\s*(?:(?:"[\w\- ]{1,50}")|(?:[\w\-]{1,30}))\s*$/,
+    my @words = grep {/^\s*(?:(?:"[\w\- ]{1,50}")|(?:[\w\-]{1,30}))\s*$/}
         split /,/, $attrval;
 
     scalar(@words) ? join( ', ', @words ) : undef;
@@ -1732,7 +1721,7 @@ sub _hss_attval_href {
             && substr( $attval, 0, 7 ) eq 'mailto:' ) {
         return $filter->validate_mailto($attval);
     }
-    return undef;
+    return;
 
 }
 
@@ -1751,7 +1740,7 @@ sub _hss_attval_src {
         return $filter->validate_src_attribute($attval);
     }
     else {
-        return undef;
+        return;
     }
 }
 
@@ -1768,7 +1757,7 @@ sub _hss_attval_stylesrc {
         return _hss_attval_src( $filter, $tagname, $attname, $1 );
     }
     else {
-        return undef;
+        return;
     }
 }
 
@@ -1874,7 +1863,7 @@ sub _hss_prepare_rules {
 
     my $rules = $cfg->{Rules};
 
-    return undef
+    return
         unless $rules
         && ref $rules eq 'HASH'
         && keys %$rules;
@@ -1962,7 +1951,7 @@ sub _hss_prepare_rules {
         $prepared_rules{$tag} = \%prepared_rule
             if keys %prepared_rule;
     }
-    return undef
+    return
         unless keys %prepared_rules;
 
     # Add default setting of {'*' => {'*' => 1}}
@@ -2209,6 +2198,8 @@ E<lt>clint@traveljury.comE<gt>
 Copyright (C) 2003 Nick Cleaton.  All Rights Reserved.
 
 Copyright (C) 2007 Clinton Gormley.  All Rights Reserved.
+
+=head1 LICENSE
 
 This module is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
