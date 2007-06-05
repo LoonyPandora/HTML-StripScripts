@@ -3,7 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '0.991';
+$VERSION = '1.00';
 
 =head1 NAME
 
