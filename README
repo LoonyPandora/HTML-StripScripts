@@ -1,5 +1,5 @@
 NAME
-    HTML::StripScripts - strip scripting constructs out of HTML
+    HTML::StripScripts - Strip scripting constructs out of HTML
 
 SYNOPSIS
       use HTML::StripScripts;
@@ -35,12 +35,17 @@ DESCRIPTION
 
     Previously, in order to customise the output, you needed to subclass
     "HTML::StripScripts" and override methods. Now, most customisation can
-    be done through the "Rules" option provided to "new()".
+    be done through the "Rules" option provided to "new()". (See
+    examples/declaration/ and examples/tags/ for cases where subclassing is
+    necessary.)
 
     The HTML document must be parsed into start tags, end tags and text
     before it can be filtered by this module. Use either
     HTML::StripScripts::Parser or HTML::StripScripts::Regex instead if you
     want to input an unparsed HTML document.
+
+    See examples/direct/ for an example of how to feed tokens directly to
+    HTML::StripScripts.
 
 CONSTRUCTORS
     new ( CONFIG )
@@ -296,9 +301,9 @@ CONSTRUCTORS
             tags, you could do this:
 
                 sub b_callback {
-                    my ($filter,$element)  = @_;
-                    $element->{tag}        = 'span';
-                    $elemnt->{attr}{style} = 'font-weight:bold';
+                    my ($filter,$element)   = @_;
+                    $element->{tag}         = 'span';
+                    $element->{attr}{style} = 'font-weight:bold';
                     return 1;
                 }
 
@@ -334,6 +339,10 @@ CONSTRUCTORS
 
 METHODS
     This class provides the following methods:
+
+    hss_init ()
+        This method is called by new() and does the actual initialisation
+        work for the new HTML::StripScripts object.
 
     input_start_document ()
         This method initializes the filter, and must be called once before
@@ -459,6 +468,9 @@ WHITELIST INITIALIZATION METHODS
 
     The default implementations of these methods can be invoked as class
     methods.
+
+    See examples/tags/ and examples/declaration/ for examples of how to
+    override these methods.
 
     init_context_whitelist ()
         Returns a reference to the "Context" whitelist, which determines
@@ -807,6 +819,11 @@ BUGS AND LIMITATIONS
         instance empty required attributes may be outputted. However, with
         "Rules", it should be possible to force the HTML to validate.
 
+    REPORTING BUGS
+        Please report any bugs or feature requests to
+        bug-html-stripscripts@rt.cpan.org, or through the web interface at
+        <http://rt.cpan.org>.
+
 SEE ALSO
     HTML::Parser, HTML::StripScripts::Parser, HTML::StripScripts::Regex
 
@@ -821,6 +838,7 @@ COPYRIGHT
 
     Copyright (C) 2007 Clinton Gormley. All Rights Reserved.
 
+LICENSE
     This module is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.
 

@@ -3,7 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 =head1 NAME
 
@@ -45,12 +45,17 @@ properly nested.
 
 Previously, in order to customise the output, you needed to subclass
 C<HTML::StripScripts> and override methods.  Now, most customisation
-can be done through the C<Rules> option provided to C<new()>.
+can be done through the C<Rules> option provided to C<new()>. (See
+examples/declaration/ and examples/tags/ for cases where subclassing is
+necessary.)
 
 The HTML document must be parsed into start tags, end tags and
 text before it can be filtered by this module.  Use either
 L<HTML::StripScripts::Parser> or L<HTML::StripScripts::Regex> instead
 if you want to input an unparsed HTML document.
+
+See examples/direct/ for an example of how to feed tokens directly to
+ HTML::StripScripts.
 
 =head1 CONSTRUCTORS
 
@@ -891,6 +896,9 @@ to a whitelist.
 
 The default implementations of these methods can be invoked as class
 methods.
+
+See examples/tags/ and examples/declaration/ for examples of how to
+override these methods.
 
 =over
 

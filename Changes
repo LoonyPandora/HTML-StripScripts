@@ -1,3 +1,5 @@
+1.02  22 Oct 2007  Added the examples into the POD
+
 1.01  22 Oct 2007  Fixed the attribute regex to recognise attributes
                    with hyphens eg 'http-equiv'
 
