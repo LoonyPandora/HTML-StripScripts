@@ -24,8 +24,8 @@ my %tags_default = ( 'undef'   => undef,
 
 my %results;
 
-foreach my $b qw(undef 0 1 sub hash tag_sub) {
-    foreach my $default qw(undef 0 1 sub hash tag_0 tag_1 tag_sub) {
+foreach my $b (qw(undef 0 1 sub hash tag_sub)) {
+    foreach my $default (qw(undef 0 1 sub hash tag_0 tag_1 tag_sub)) {
         my $test = "${b} :: ${default}";
         test_tag( $test, $tags_b{$b}, $tags_default{$default},
                   $results{$test} );

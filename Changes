@@ -1,3 +1,6 @@
+1.03  22 Oct 2007  Altered some syntax in a test to make it work in earlier
+                   versions of Perl
+
 1.02  22 Oct 2007  Added the examples into the POD
 
 1.01  22 Oct 2007  Fixed the attribute regex to recognise attributes
