@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                HTML-StripScripts
-version:             1.00
+version:             1.01
 abstract:            Strip scripting constructs out of HTML
 license:             perl
 generated_by:        ExtUtils::MakeMaker version 6.32

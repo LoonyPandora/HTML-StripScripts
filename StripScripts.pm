@@ -3,7 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 =head1 NAME
 
@@ -327,9 +327,9 @@ If for instance, you wanted to replace C<< <b> >> tags with C<< <span> >> tags,
 you could do this:
 
     sub b_callback {
-        my ($filter,$element)  = @_;
-        $element->{tag}        = 'span';
-        $elemnt->{attr}{style} = 'font-weight:bold';
+        my ($filter,$element)   = @_;
+        $element->{tag}         = 'span';
+        $element->{attr}{style} = 'font-weight:bold';
         return 1;
     }
 
@@ -417,7 +417,6 @@ sub input_start_document {
     my ( $self, $context ) = @_;
 
     $self->{_hssStack} = [ { NAME    => '',
-                             FULL    => '',
                              CTX     => $self->{_hssCfg}{Context} || 'Flow',
                              CONTENT => '',
                            }
@@ -465,7 +464,7 @@ sub _hss_accept_input_start {
 
     my %filtered_attr;
     while ( $attr
-            =~ s#^\s*(\w+)(?:\s*=\s*(?:([^"'>\s]+)|"([^"]*)"|'([^']*)'))?## )
+            =~ s#^\s*([\w\-]+)(?:\s*=\s*(?:([^"'>\s]+)|"([^"]*)"|'([^']*)'))?## )
     {
         my $key = lc $1;
         my $val = (   defined $2 ? $self->unquoted_to_canonical_form($2)
@@ -580,7 +579,6 @@ sub _hss_accept_input_end {
     # configured to be auto de-interleaved.
     unless ( grep { !$self->{_hssDeInter}{ $_->{NAME} } } @close ) {
         pop @close;
-
         unshift @{ $self->{_hssStack} }, @close;
     }
 
@@ -680,7 +678,6 @@ Returns the filtered document as a string.
 
 sub filtered_document {
     my ($self) = @_;
-
     $self->{_hssOutput};
 }
 
@@ -800,7 +797,6 @@ within the tag has been processed. It adds the tag plus its content
 to the content for its parent tag.
 
 =cut
-
 
 sub output_stack_entry {
     my ( $self, $tag ) = @_;
@@ -1356,7 +1352,7 @@ plus it converts any CR, LF or TAB characters to spaces.
 sub quoted_to_canonical_form {
     my ( $self, $text ) = @_;
     $text = $self->text_to_canonical_form($text);
-    $text=~tr/\n\r\t/   /s;
+    $text =~ tr/\n\r\t/   /s;
     return $text;
 }
 
@@ -1413,10 +1409,9 @@ valid entity through the escape_html_metachars() method.
 
 sub canonical_form_to_attval {
     my ( $self, $text ) = @_;
-    $text=~tr/\n\r\t/   /s;
+    $text =~ tr/\n\r\t/   /s;
     return $self->canonical_form_to_text($text);
 }
-
 
 =item validate_href_attribute ( TEXT )
 
@@ -1575,7 +1570,6 @@ sub strip_nonprintable {
     return $text;
 }
 
-
 =back
 
 =head1 ATTRIBUTE VALUE HANDLER SUBS
@@ -1718,7 +1712,8 @@ sub _hss_attval_href {
         return $filter->validate_href_attribute($attval);
     }
     elsif ( $filter->{_hssCfg}{AllowMailto}
-            && substr( $attval, 0, 7 ) eq 'mailto:' ) {
+            && substr( $attval, 0, 7 ) eq 'mailto:' )
+    {
         return $filter->validate_mailto($attval);
     }
     return;
@@ -1814,8 +1809,8 @@ sub _hss_prepare_ban_list {
     my ( $self, $cfg ) = @_;
 
     my $ban_list = $cfg->{BanList} || {};
-    my $prepared_ban_list =
-        ref $ban_list eq 'ARRAY'
+    my $prepared_ban_list
+        = ref $ban_list eq 'ARRAY'
         ? { map { $_ => 1 } @$ban_list }
         : $ban_list;
 
@@ -2178,6 +2173,12 @@ or the validation methods can be overriden.
 By default, filtered HTML may not be valid strict XHTML, for instance empty
 required attributes may be outputted.  However, with L</"Rules">,
 it should be possible to force the HTML to validate.
+
+=item REPORTING BUGS
+
+Please report any bugs or feature requests to
+bug-html-stripscripts@rt.cpan.org, or through the web interface at
+L<http://rt.cpan.org>.
 
 =back
 

@@ -3,6 +3,15 @@ Changes
 Makefile.PL
 README
 StripScripts.pm
+examples/direct/direct.pl
+examples/direct/README
+examples/declaration/MyStripScripts.pm
+examples/declaration/declaration.pl
+examples/declaration/README
+examples/tags/tags.pl
+examples/tags/MyStripScripts.pm
+examples/tags/README
+examples/README
 t/10basic.t
 t/20config.t
 t/30subclass.t
