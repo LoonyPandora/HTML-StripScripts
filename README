@@ -129,7 +129,8 @@ CONSTRUCTORS
 
         "AllowMailto"
             By default, "mailto:" links are not allowed. If "AllowMailto" is
-            set to a true value, then this construct will be allowed.
+            set to a true value, then this construct will be allowed. This
+            can be enabled separately from AllowHref.
 
         "EscapeFiltered"
             By default, any filtered tags are outputted as
@@ -705,7 +706,7 @@ ATTRIBUTE VALUE HANDLER SUBS
 
     _hss_attval_href ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
         Attribute value handler for "href" type attributes. If the
-        "AllowHref" configuration option is set, uses the
+        "AllowHref" or "AllowMailto" configuration options are set, uses the
         validate_href_attribute() method to check the attribute value.
 
     _hss_attval_src ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )

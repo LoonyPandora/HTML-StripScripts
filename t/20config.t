@@ -1,6 +1,6 @@
 
 use strict;
-use Test::More tests => 22;
+use Test::More tests => 24;
 
 BEGIN { $^W = 1 }
 
@@ -190,4 +190,18 @@ $f->input_start('<a href="mailto:test@test.com">');
 $f->input_text('foo');
 $f->input_end_document;
 is( $f->filtered_document, '<a href="mailto:test@test.com">foo</a>', 'AllowMailto yes' );
+
+$f = HTML::StripScripts->new({ AllowMailto => 1, AllowHref => 1 });
+$f->input_start_document;
+$f->input_start('<a href="mailto:test@test.com">');
+$f->input_text('foo');
+$f->input_end_document;
+is( $f->filtered_document, '<a href="mailto:test@test.com">foo</a>', 'AllowMailto + AllowHref works with mailto' );
+
+$f = HTML::StripScripts->new({ AllowMailto => 1, AllowHref => 1 });
+$f->input_start_document;
+$f->input_start('<a href="http://abc.com">');
+$f->input_text('foo');
+$f->input_end_document;
+is( $f->filtered_document, '<a href="http://abc.com">foo</a>', 'AllowMailto + AllowHref works with http' );
 

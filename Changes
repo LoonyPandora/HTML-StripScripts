@@ -1,3 +1,6 @@
+1.04  16 Nov 2007  Fixed bug where mailto links not working when
+                   AllowHref enabled. (Thanks to Menno Blom - 'b10m').
+
 1.03  22 Oct 2007  Altered some syntax in a test to make it work in earlier
                    versions of Perl
 

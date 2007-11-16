@@ -3,7 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '1.03';
+$VERSION = '1.04';
 
 =head1 NAME
 
@@ -157,7 +157,8 @@ for this to have any effect.
 =item C<AllowMailto>
 
 By default, C<mailto:> links are not allowed. If C<AllowMailto> is set to
-a true value, then this construct will be allowed.
+a true value, then this construct will be allowed. This can be enabled
+separately from AllowHref.
 
 =item C<EscapeFiltered>
 
@@ -469,7 +470,7 @@ sub _hss_accept_input_start {
 
     my %filtered_attr;
     while ( $attr
-            =~ s#^\s*([\w\-]+)(?:\s*=\s*(?:([^"'>\s]+)|"([^"]*)"|'([^']*)'))?## )
+           =~ s#^\s*([\w\-]+)(?:\s*=\s*(?:([^"'>\s]+)|"([^"]*)"|'([^']*)'))?## )
     {
         my $key = lc $1;
         my $val = (   defined $2 ? $self->unquoted_to_canonical_form($2)
@@ -520,8 +521,7 @@ sub _hss_accept_input_start {
     my $tag_callback = $tag_filters && $tag_filters->{tag}
         || $default_filters->{tag};
 
-    my $new_context
-        = $self->{_hssContext}{ $self->{_hssStack}[0]{CTX} }{$tag};
+    my $new_context = $self->{_hssContext}{ $self->{_hssStack}[0]{CTX} }{$tag};
 
     my %stack_entry = ( NAME     => $tag,
                         ATTR     => \%filtered_attr,
@@ -1708,21 +1708,21 @@ sub _hss_attval_wordlistq {
 =item _hss_attval_href ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
 
 Attribute value handler for C<href> type attributes.  If the C<AllowHref>
-configuration option is set, uses the validate_href_attribute() method
-to check the attribute value.
+or C<AllowMailto> configuration options are set,
+uses the validate_href_attribute() method to check the attribute value.
 
 =cut
 
 sub _hss_attval_href {
     my ( $filter, $tagname, $attname, $attval ) = @_;
 
-    if ( $filter->{_hssCfg}{AllowHref} ) {
-        return $filter->validate_href_attribute($attval);
-    }
-    elsif ( $filter->{_hssCfg}{AllowMailto}
-            && substr( $attval, 0, 7 ) eq 'mailto:' )
+    if ( $filter->{_hssCfg}{AllowMailto}
+         && substr( $attval, 0, 7 ) eq 'mailto:' )
     {
         return $filter->validate_mailto($attval);
+    }
+    elsif ( $filter->{_hssCfg}{AllowHref} ) {
+        return $filter->validate_href_attribute($attval);
     }
     return;
 
