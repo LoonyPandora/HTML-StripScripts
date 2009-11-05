@@ -3,7 +3,7 @@ use strict;
 use warnings FATAL => 'all';
 
 use vars qw($VERSION);
-$VERSION = '1.04';
+$VERSION = '1.05';
 
 =head1 NAME
 
@@ -513,7 +513,7 @@ sub _hss_accept_input_start {
     if ( my $required = $tag_filters->{required} ) {
         foreach my $key (@$required) {
             return 0
-                unless length( $filtered_attr{$key} || '' );
+                unless defined $filtered_attr{$key} && length($filtered_attr{$key});
         }
     }
 
@@ -826,7 +826,7 @@ sub output_stack_entry {
         $self->output_start("<$tagname$filtered_attrs>");
     }
 
-    if ( $entry{content} ) {
+    if ( defined $entry{content} ) {
         $self->{_hssStack}[0]{CONTENT} .= $entry{content};
     }
 

@@ -1,6 +1,6 @@
 
 use strict;
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 BEGIN { $^W = 1 }
 
@@ -41,3 +41,9 @@ $f->input_text('foo');
 $f->input_end_document;
 is( $f->filtered_document, '<img alt="foo foo" />foo', 'img alt' );
 
+$f->input_start_document;
+$f->input_start('<i>');
+$f->input_text('0');
+$f->input_end('</i>');
+$f->input_end_document;
+is ($f->filtered_document,'<i>0</i>', 'false but valid content');
