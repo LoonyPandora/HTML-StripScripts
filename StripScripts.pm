@@ -1031,7 +1031,7 @@ use vars qw(%_Attrib);
 
 BEGIN {
 
-    my %attr = ( 'style' => 'style' );
+    my %attr = ( 'style' => 'style', 'class' => 'class', 'id' => 'id' );
 
     my %font_attr = ( %attr,
                       'size'  => 'size',
@@ -1246,6 +1246,8 @@ BEGIN {
                  'src'       => \&_hss_attval_src,
                  'stylesrc'  => \&_hss_attval_stylesrc,
                  'novalue'   => \&_hss_attval_novalue,
+                 'class'     => \&_hss_attval_class,
+                 'id'        => \&_hss_attval_id,
     );
 }
 
@@ -1419,6 +1421,83 @@ sub canonical_form_to_attval {
     my ( $self, $text ) = @_;
     $text =~ tr/\n\r\t/   /s;
     return $self->canonical_form_to_text($text);
+}
+
+=item validate_html_class ( TEXT )
+
+If the C<AllowClass> filter configuration option is set, then this
+method is used to validate C<class> type attribute values. TEXT is
+the attribute value in canonical form.  Returns a possibly modified
+attribute value (in canonical form) or C<undef> to reject the attribute.
+
+The default implementation validates class names as confirming to the
+CSS 2.1 spec L<http://www.w3.org/TR/CSS21/syndata.html#characters>.
+
+Each individual class name is evaluated seperately, if it is not valid
+that individual class name is removed from the attribute. If there are
+no valid class names, then undef is returned.
+
+=cut
+
+sub validate_html_class {
+    my ( $self, $text ) = @_;
+
+    $text =~ s/\s+/ /g;
+
+    my @selectors = split (/ /, $text);
+    my @safe_selectors;
+
+    for (@selectors) {
+        push @safe_selectors, $_ if $_ =~ m/^-?[A-Za-z_][A-Za-z0-9_-]+$/;
+    }
+
+    return join (' ', @safe_selectors) if @safe_selectors;
+
+    return;
+}
+
+=item validate_html_id ( TEXT )
+
+If the C<AllowId> filter configuration option is set, then this
+method is used to validate C<id> type attribute values. TEXT is
+the attribute value in canonical form.  Returns a possibly modified
+attribute value (in canonical form) or C<undef> to reject the attribute.
+
+The default implementation validates ID's as confirming to the
+html4 spec L<http://www.w3.org/TR/html4/types.html#type-name>.
+
+It does not ensure uniqueness of an ID.
+
+=cut
+
+sub validate_html_id {
+    my ( $self, $text ) = @_;
+
+    return $1 if $text =~ m/^([A-Za-z][A-Za-z0-9_:.-]+)$/;
+
+    return;
+}
+
+=item validate_html5_id ( TEXT )
+
+If the C<AllowHtml5Id> filter configuration option is set, then this
+method is used to validate C<id> type attribute values. TEXT is
+the attribute value in canonical form.  Returns a possibly modified
+attribute value (in canonical form) or C<undef> to reject the attribute.
+
+The default implementation validates ID's as confirming to the draft
+html5 spec L<http://www.w3.org/TR/html5/elements.html#the-id-attribute>.
+
+It does not ensure uniqueness of an ID.
+
+=cut
+
+sub validate_html5_id {
+    my ( $self, $text ) = @_;
+
+    return $1 if $text =~ m/^(.+)$/;
+
+    return;
 }
 
 =item validate_href_attribute ( TEXT )
@@ -1726,6 +1805,44 @@ sub _hss_attval_href {
     }
     return;
 
+}
+
+=item _hss_attval_id ( TAG )
+
+Attribute value handler for C<id> type attributes. If the C<AllowHtml5Id>
+or C<AllowId> configuration options are set, uses the relevant method
+to check the attribute value.
+
+=cut
+
+sub _hss_attval_id {
+    my ( $filter, $tagname, $attname, $attval ) = @_;
+
+    if ( $filter->{_hssCfg}{AllowHtml5Id} ) {
+        return $filter->validate_html5_id($attval);
+    } elsif ( $filter->{_hssCfg}{AllowId} ) {
+        return $filter->validate_html_id($attval);
+    }
+
+    return;
+}
+
+=item _hss_attval_class ( TAG )
+
+Attribute value handler for C<class> type attributes. If the C<AllowClass>
+configuration option is set, uses the validate_html_class() method
+to check the attribute value.
+
+=cut
+
+sub _hss_attval_class {
+    my ( $filter, $tagname, $attname, $attval ) = @_;
+
+    if ( $filter->{_hssCfg}{AllowClass} ) {
+        return $filter->validate_html_class($attval);
+    }
+
+    return;
 }
 
 =item _hss_attval_src ( FILTER, TAGNAME, ATTRNAME, ATTRVAL )
